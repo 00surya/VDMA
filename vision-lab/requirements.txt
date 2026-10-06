@@ -1,0 +1,7 @@
+# Runtime verified in this isolated lab; see requirements.lock for exact dependencies.
+mlx-vlm==0.7.3
+fastapi
+uvicorn
+opencv-python
+psutil
+httpx

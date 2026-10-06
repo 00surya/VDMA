@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Vision Lab · Camera understanding</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101314; --surface:#191d1f; --line:#303638; --muted:#a1adaf; --text:#edf3f2; --accent:#b7eccb; --red:#ffb4ad; --amber:#efce93; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button,input { font:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:default; opacity:.42; }
+    button:focus-visible,input:focus-visible,summary:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+    .shell { max-width:1540px; margin:auto; padding:32px 40px 24px; }
+    .top { display:flex; align-items:center; justify-content:space-between; gap:20px; padding-bottom:26px; border-bottom:1px solid var(--line); }
+    .brand { display:flex; align-items:center; gap:12px; font-size:20px; font-weight:650; letter-spacing:-.7px; }
+    .mark { width:32px; height:32px; display:grid; place-items:center; border:1px solid #557961; border-radius:10px; color:var(--accent); }
+    .mark svg { width:19px; height:19px; }
+    .pill { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:100px; padding:5px 11px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:1px; white-space:nowrap; }
+    .isolated { color:var(--accent); background:#1d2b23; border-color:#364b3d; }
+    .service { color:var(--muted); font-size:12px; display:flex; align-items:center; gap:8px; }
+    .dot { width:6px; height:6px; display:inline-block; flex:none; border-radius:50%; background:currentColor; }
+    h1 { margin:34px 0 8px; font-size:clamp(28px,3.2vw,42px); font-weight:550; line-height:1.15; letter-spacing:-1.5px; }
+    .intro { color:var(--muted); margin:0 0 28px; font-size:15px; max-width:730px; }
+    .layout { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(320px,1fr); gap:22px; align-items:start; }
+    .panel { border:1px solid var(--line); border-radius:14px; background:var(--surface); overflow:hidden; }
+    .panel-heading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:17px 20px; border-bottom:1px solid var(--line); }
+    h2 { margin:0; font-size:15px; font-weight:600; letter-spacing:-.2px; }
+    .eyebrow { color:var(--muted); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; font-weight:650; }
+    .status { font-size:11px; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); display:flex; align-items:center; gap:7px; }
+    .status[data-tone="good"] { color:var(--accent); }
+    .status[data-tone="warn"] { color:var(--amber); }
+    .status[data-tone="bad"] { color:var(--red); }
+    .preview { aspect-ratio:16/10; background:#080b0c; position:relative; display:grid; place-items:center; overflow:hidden; }
+    .preview img { position:absolute; width:100%; height:100%; object-fit:contain; }
+    .preview img[hidden] { display:none; }
+    .placeholder { padding:35px; text-align:center; color:var(--muted); max-width:360px; }
+    .camera-symbol { display:block; width:48px; height:48px; margin:0 auto 14px; color:#59676b; }
+    .placeholder strong { display:block; color:#d7dfdf; font-size:16px; font-weight:500; margin-bottom:5px; }
+    .preview-badge { position:absolute; z-index:1; left:16px; top:16px; background:#0e1415dd; border:1px solid #394341; backdrop-filter:blur(6px); border-radius:6px; padding:5px 9px; color:var(--accent); font-size:10px; font-weight:650; text-transform:uppercase; letter-spacing:1px; }
+    .preview-badge.stale { color:var(--amber); }
+    .preview-bottom { position:absolute; z-index:1; bottom:0; left:0; right:0; padding:32px 17px 14px; background:linear-gradient(transparent,#070a0bcf); font:11px/1.5 ui-monospace,SFMono-Regular,monospace; color:#d1d9d8; display:flex; justify-content:space-between; gap:10px; }
+    .preview-bottom span { overflow-wrap:anywhere; }
+    .control-footer { padding:17px 20px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+    .button { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:10px 16px; background:#272e30; color:var(--text); border:1px solid #414b4d; border-radius:8px; font-weight:550; line-height:1.35; min-height:42px; }
+    .button:hover:not(:disabled) { background:#344043; }
+    .primary { color:#18261d; background:var(--accent); border-color:var(--accent); }
+    .primary:hover:not(:disabled) { background:#d1f6dd; }
+    .quiet { background:transparent; }
+    .control-note { color:var(--muted); font-size:12px; margin-left:auto; }
+    .connect { margin-top:22px; padding:20px; }
+    .connect h2 { margin-bottom:17px; }
+    .form-grid { display:grid; grid-template-columns:1fr 130px; gap:14px; }
+    .url-field { grid-column:1 / -1; }
+    label { display:block; color:#c3cdce; font-size:12px; margin-bottom:7px; }
+    input { display:block; width:100%; background:#101516; border:1px solid #3a4446; color:var(--text); border-radius:7px; padding:11px 12px; min-width:0; }
+    input::placeholder { color:#708184; }
+    .hint { color:var(--muted); font-size:12px; margin:8px 0 0; }
+    .form-actions { display:flex; align-items:center; gap:14px; margin-top:18px; }
+    .form-actions .hint { margin:0; }
+    details { margin-top:18px; color:var(--muted); font-size:12px; }
+    summary { cursor:pointer; color:#c3cdce; width:fit-content; }
+    details p { margin:10px 0 0; }
+    code { font-family:ui-monospace,SFMono-Regular,monospace; font-size:11px; color:#c7dfd0; }
+    .model-card { padding:20px; border-bottom:1px solid var(--line); }
+    .model-title { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .model-title strong { font-size:14px; font-weight:550; }
+    .model-sub { margin:6px 0 16px; color:var(--muted); font-size:12px; }
+    .metrics { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--line); border-radius:8px; }
+    .metric { padding:11px 12px; min-width:0; }
+    .metric + .metric { border-left:1px solid var(--line); }
+    .metric span { display:block; color:var(--muted); font-size:10px; }
+    .metric strong { font:500 15px/1.6 ui-monospace,SFMono-Regular,monospace; white-space:nowrap; }
+    .observation { padding:23px 20px; min-height:238px; }
+    .observation-top { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+    .observation .eyebrow { color:var(--accent); }
+    .time { font:11px/1.5 ui-monospace,SFMono-Regular,monospace; color:var(--muted); }
+    #latestText { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:17px; line-height:1.7; letter-spacing:-.2px; }
+    #latestText.empty { color:var(--muted); font-size:15px; }
+    .observation-detail { margin:18px 0 0; color:var(--muted); font-size:11px; }
+    .uncertainty { margin:0; padding:14px 20px; background:#151a1b; border-top:1px solid var(--line); color:var(--muted); font-size:11px; }
+    .history-panel { margin-top:22px; }
+    .count { font:11px ui-monospace,SFMono-Regular,monospace; color:var(--muted); }
+    .history { max-height:390px; overflow-y:auto; }
+    .history-empty { color:var(--muted); font-size:12px; margin:0; padding:24px 20px; }
+    .history-entry { padding:17px 20px; }
+    .history-entry + .history-entry { border-top:1px solid var(--line); }
+    .history-meta { display:flex; justify-content:space-between; gap:12px; margin-bottom:7px; color:var(--muted); font:10px/1.5 ui-monospace,SFMono-Regular,monospace; }
+    .history-entry p { margin:0; color:#c6d0d0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; }
+    .error { padding:11px 14px; background:#35231f; border:1px solid #6c4940; color:#ffd0be; border-radius:8px; margin:14px 0 0; font-size:12px; overflow-wrap:anywhere; }
+    .global-error { margin:0 0 20px; }
+    [hidden] { display:none !important; }
+    footer { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; color:#879698; font-size:11px; margin-top:28px; padding-top:18px; border-top:1px solid var(--line); }
+    @media (max-width:1000px) { .shell { padding:25px; } .layout { grid-template-columns:minmax(0,1.3fr) minmax(310px,1fr); gap:16px; } .metrics { grid-template-columns:1fr; } .metric { display:flex; align-items:center; justify-content:space-between; padding:7px 12px; } .metric + .metric { border-left:0; border-top:1px solid var(--line); } .control-note { flex-basis:100%; margin:0; } }
+    @media (max-width:760px) { .shell { padding:20px 16px; } .layout { grid-template-columns:1fr; } .top { align-items:flex-start; flex-wrap:wrap; gap:12px; padding-bottom:20px; } .brand { font-size:18px; } .isolated { font-size:9px; } .service { margin-left:auto; } h1 { margin-top:27px; } .intro { font-size:14px; } .metrics { grid-template-columns:repeat(3,1fr); } .metric { display:block; padding:10px; } .metric + .metric { border-top:0; border-left:1px solid var(--line); } .observation { min-height:190px; } .form-actions { align-items:flex-start; flex-direction:column; } .form-actions .button { width:100%; } }
+    @media (prefers-reduced-motion:no-preference) { button { transition:background .15s; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top">
+      <div class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 9V5a2 2 0 0 1 2-2h4M15 3h4a2 2 0 0 1 2 2v4M21 15v4a2 2 0 0 1-2 2h-4M9 21H5a2 2 0 0 1-2-2v-4"/><circle cx="12" cy="12" r="4"/></svg></span>Vision Lab <span class="pill isolated">Isolated experiment</span></div>
+      <div class="service" id="serviceStatus"><span class="dot" aria-hidden="true"></span><span id="serviceText">Connecting to local server</span></div>
+    </header>
+    <h1>A live view. A little understanding.</h1>
+    <p class="intro">Connect an IP camera and let a small local vision model describe selected frames. A separate playground for testing what it sees.</p>
+    <div id="transportError" class="error global-error" role="status" hidden></div>
+    <div class="layout">
+      <div>
+        <section class="panel" aria-labelledby="feedHeading">
+          <div class="panel-heading"><h2 id="feedHeading">Camera feed</h2><span class="status" id="cameraStatus"><span class="dot" aria-hidden="true"></span><span>Not connected</span></span></div>
+          <div class="preview">
+            <img id="frame" alt="Latest frame from the connected camera" hidden>
+            <div class="placeholder" id="placeholder"><svg class="camera-symbol" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="12" width="27" height="24" rx="5"/><path d="m32 20 10-6v20l-10-6"/><circle cx="18.5" cy="24" r="5"/></svg><strong id="placeholderTitle">Your camera, live here</strong><span id="placeholderText">Add the stream address below to get started.</span></div>
+            <span class="preview-badge" id="frameBadge" hidden>Live</span>
+            <div class="preview-bottom" id="frameMeta" hidden><span id="frameName">Camera</span><span id="frameTime">—</span></div>
+          </div>
+          <div class="control-footer"><button class="button" id="analyzeButton" type="button" disabled><span aria-hidden="true">✧</span> Analyze now</button><button class="button quiet" id="stopButton" type="button" disabled>Stop camera</button><span class="control-note" id="scheduleNote">Waiting for a camera</span></div>
+        </section>
+        <section class="panel connect" aria-labelledby="connectionHeading">
+          <h2 id="connectionHeading">Connect an IP camera</h2>
+          <form id="cameraForm">
+            <div class="form-grid">
+              <div class="url-field"><label for="cameraUrl">Camera URL</label><input id="cameraUrl" name="url" type="text" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="http://192.168.1.100:8080/video" required maxlength="2048" aria-describedby="urlHint"><p class="hint" id="urlHint">HTTP, HTTPS or RTSP stream. IP Webcam base addresses work too.</p></div>
+              <div><label for="cameraName">Camera name <span class="hint">(optional)</span></label><input id="cameraName" name="name" type="text" autocomplete="off" placeholder="Desk camera" maxlength="80"></div>
+              <div><label for="interval">Analyze every</label><div style="position:relative"><input id="interval" name="interval" type="number" value="5" min="2" max="60" step="1" required style="padding-right:36px" aria-describedby="intervalHint"><span style="position:absolute;right:12px;top:11px;color:var(--muted);pointer-events:none">sec</span></div></div>
+            </div>
+            <div class="form-actions"><button class="button primary" id="connectButton" type="submit">Connect camera <span aria-hidden="true">↗</span></button><p class="hint" id="intervalHint">One frame at a time. Slower intervals reduce compute.</p></div>
+          </form>
+          <div id="actionError" class="error" role="alert" hidden></div>
+          <div id="cameraError" class="error" role="status" hidden></div>
+          <details><summary>Finding your camera address</summary><p>Start the camera server on your phone, then copy its HTTP address. For Android IP Webcam, this lab uses the <code>/video</code> stream. Keep the camera and this computer on a reachable local network; some college or guest Wi-Fi networks block device-to-device connections.</p><p>The address is kept in this session only. Camera video stays on this computer.</p></details>
+        </section>
+      </div>
+      <div>
+        <section class="panel" aria-labelledby="observationHeading">
+          <div class="panel-heading"><h2 id="observationHeading">Scene understanding</h2><span class="status" id="modelStatus"><span class="dot" aria-hidden="true"></span><span>Idle</span></span></div>
+          <div class="model-card">
+            <div class="model-title"><strong id="modelName">LFM2.5-VL-450M</strong><span class="eyebrow">Local · MLX</span></div>
+            <p class="model-sub" id="modelHint">The first model download and load can take a few minutes.</p>
+            <div class="metrics"><div class="metric"><span>Last inference</span><strong id="latency">—</strong></div><div class="metric"><span>Process RAM</span><strong id="memory">—</strong></div><div class="metric"><span>Peak MLX</span><strong id="peakMemory">—</strong></div></div>
+            <div id="modelError" class="error" role="status" hidden></div>
+          </div>
+          <div class="observation">
+            <div class="observation-top"><span class="eyebrow">Model observation</span><span class="time" id="observationTime">No frame analyzed</span></div>
+            <p id="latestText" class="empty" aria-live="polite">The model’s description will appear here after the first frame is analyzed.</p>
+            <p class="observation-detail" id="observationDetail">Descriptions are based on individual frames, not continuous video.</p>
+            <div id="analysisError" class="error" role="status" hidden></div>
+          </div>
+          <p class="uncertainty">An experimental description, not a verified incident. Small models can miss details or describe things that are not present.</p>
+        </section>
+        <section class="panel history-panel" aria-labelledby="historyHeading"><div class="panel-heading"><h2 id="historyHeading">Observation history</h2><span class="count" id="historyCount">0 observations</span></div><div class="history" id="history"><p class="history-empty">Recent descriptions will collect here during your session.</p></div></section>
+      </div>
+    </div>
+    <footer><span>Runs locally. No clips saved. No calls sent.</span><span>Independent from VDMA · Session-only observations</span></footer>
+  </main>
+  <script>
+    'use strict';
+    const $ = id => document.getElementById(id);
+    let state = null, offline = true, polling = false, busy = false, intervalEdited = false;
+    let clockOffset = 0, displayedFrame = null, requestedFrame = null, hasFrame = false, imageError = false, historySignature = '';
+    let displayedFrameAt = null, pendingImage = null;
+    const cameraLabels = {idle:'Not connected', connecting:'Connecting', streaming:'Streaming', reconnecting:'Reconnecting', stopped:'Stopped', error:'Camera error'};
+    const modelLabels = {idle:'Idle', loading:'Loading model', ready:'Ready', analyzing:'Analyzing', error:'Model error'};
+    function message(id, text) { $(id).textContent = text || ''; $(id).hidden = !text; }
+    function status(id, label, tone) { const el = $(id); el.lastElementChild.textContent = label; el.dataset.tone = tone || ''; }
+    function timestamp(value) { return Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : null; }
+    function formatTime(value) { return timestamp(value) ? new Date(Number(value) * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '—'; }
+    function age(value) { return timestamp(value) ? Math.max(0, (Date.now() + clockOffset) / 1000 - Number(value)) : null; }
+    function ageText(value) { const seconds = age(value); return seconds === null ? 'unknown age' : seconds < 1 ? 'just now' : seconds < 60 ? `${Math.floor(seconds)}s ago` : `${Math.floor(seconds / 60)}m ago`; }
+    function memory(value) { const n = Number(value); return Number.isFinite(n) && n > 0 ? n >= 1024 ? `${(n / 1024).toFixed(2)} GB` : `${Math.round(n)} MB` : '—'; }
+    function latency(value) { return Number.isFinite(Number(value)) && Number(value) >= 0 ? `${(Number(value) / 1000).toFixed(1)} s` : '—'; }
+    async function request(path, data) {
+      const options = {cache:'no-store', signal:AbortSignal.timeout(12000)};
+      if (data !== undefined) Object.assign(options, {method:'POST', headers:{'Content-Type':'application/json','X-Vision-Lab':'dashboard'}, body:JSON.stringify(data)});
+      const response = await fetch(path, options);
+      let body;
+      try { body = await response.json(); } catch { throw new Error(`The local server returned an unexpected response (${response.status}).`); }
+      if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `Request failed (${response.status}). Check the camera settings.`);
+      return body;
+    }
+    function updateButtons() {
+      const connected = state?.running && !offline;
+      $('connectButton').disabled = busy || offline;
+      $('connectButton').firstChild.textContent = busy ? 'Working… ' : connected ? 'Replace camera ' : 'Connect camera ';
+      $('stopButton').disabled = busy || !connected;
+      $('analyzeButton').disabled = busy || offline || !connected || state?.camera?.status !== 'streaming' || !timestamp(state?.camera?.frame_at) || state?.analysis?.status === 'analyzing' || state?.model?.status === 'loading';
+    }
+    function updateAges() {
+      if (!state) return;
+      const camera = state.camera || {};
+      const stale = offline || camera.status !== 'streaming' || (age(displayedFrameAt) ?? Infinity) > 5 || imageError;
+      $('frameBadge').textContent = stale ? 'Last frame · stale' : 'Live preview';
+      $('frameBadge').classList.toggle('stale', stale);
+      $('frameBadge').hidden = !hasFrame;
+      $('frameMeta').hidden = !hasFrame;
+      $('frameTime').textContent = `Captured ${formatTime(displayedFrameAt)} · ${ageText(displayedFrameAt)}`;
+      const latest = [...(state.observations || [])].sort((a,b) => b.created - a.created)[0];
+      if (latest) {
+        $('observationTime').textContent = `Frame ${formatTime(latest.frame_at)}`;
+        $('observationDetail').textContent = `Frame captured ${ageText(latest.frame_at)} · Generated ${formatTime(latest.created)}. This describes that frame, not necessarily the scene now.`;
+      }
+    }
+    function renderHistory(observations) {
+      const signature = JSON.stringify(observations);
+      if (signature === historySignature) return;
+      historySignature = signature;
+      $('historyCount').textContent = `${observations.length} observation${observations.length === 1 ? '' : 's'}`;
+      $('history').replaceChildren();
+      if (!observations.length) {
+        const empty = document.createElement('p'); empty.className = 'history-empty'; empty.textContent = 'Recent descriptions will collect here during your session.'; $('history').append(empty); return;
+      }
+      for (const observation of observations) {
+        const entry = document.createElement('article'); entry.className = 'history-entry';
+        const meta = document.createElement('div'); meta.className = 'history-meta';
+        const captured = document.createElement('span'); captured.textContent = `FRAME ${formatTime(observation.frame_at)}`;
+        const timing = document.createElement('span'); timing.textContent = `${latency(observation.latency_ms)} inference`;
+        meta.append(captured, timing);
+        const text = document.createElement('p'); text.textContent = observation.text || 'No description returned.';
+        entry.append(meta, text); $('history').append(entry);
+      }
+    }
+    function render() {
+      const camera = state.camera || {}, model = state.model || {}, analysis = state.analysis || {};
+      status('cameraStatus', cameraLabels[camera.status] || camera.status || 'Not connected', camera.status === 'streaming' ? 'good' : camera.status === 'error' ? 'bad' : ['connecting','reconnecting'].includes(camera.status) ? 'warn' : '');
+      status('modelStatus', modelLabels[model.status] || model.status || 'Idle', model.status === 'ready' ? 'good' : model.status === 'error' ? 'bad' : ['loading','analyzing'].includes(model.status) ? 'warn' : '');
+      $('modelName').textContent = model.name || 'LFM2.5-VL-450M';
+      $('memory').textContent = memory(model.process_memory_mb);
+      $('peakMemory').textContent = memory(model.peak_memory_mb);
+      $('modelHint').textContent = model.status === 'loading' ? 'Loading locally. The first model download can take a few minutes.' : model.status === 'analyzing' ? 'Describing one captured frame. The camera preview continues.' : model.status === 'ready' ? 'Model loaded locally. Memory values cover the model worker.' : model.status === 'error' ? 'The camera and model run separately. See the model error below.' : 'The first model download and load can take a few minutes.';
+      message('cameraError', camera.error); message('modelError', model.error); message('analysisError', analysis.error);
+      if (!hasFrame) {
+        $('placeholderTitle').textContent = camera.status === 'connecting' ? 'Connecting to your camera' : camera.status === 'reconnecting' ? 'Reconnecting to the camera' : camera.status === 'error' ? 'Camera unavailable' : 'Your camera, live here';
+        $('placeholderText').textContent = state.running ? 'Waiting for the first frame. Keep the camera server running.' : 'Add the stream address below to get started.';
+      }
+      if (timestamp(camera.frame_at) && camera.frame_sequence !== undefined && camera.frame_sequence !== null) {
+        const key = `${camera.frame_sequence}-${camera.frame_at}`;
+        if (key !== requestedFrame && key !== displayedFrame) {
+          requestedFrame = key;
+          // Keep the last displayed image intact if the next frame fails to load.
+          const nextImage = new Image(); pendingImage = nextImage;
+          nextImage.onload = () => {
+            if (pendingImage !== nextImage) return;
+            $('frame').src = nextImage.src;
+            hasFrame = true; imageError = false; displayedFrame = key; displayedFrameAt = camera.frame_at;
+            $('frame').hidden = false; $('placeholder').hidden = true;
+            $('frameName').textContent = `${camera.name || 'Camera'}${camera.width && camera.height ? ` · ${camera.width} × ${camera.height}` : ''}`;
+            updateAges();
+          };
+          nextImage.onerror = () => { if (pendingImage !== nextImage) return; imageError = true; requestedFrame = null; updateAges(); };
+          nextImage.src = `/api/frame.jpg?frame=${encodeURIComponent(key)}`;
+        }
+      }
+      if (!intervalEdited && document.activeElement !== $('interval') && Number.isFinite(state.interval)) $('interval').value = state.interval;
+      $('scheduleNote').textContent = !state.running ? 'Camera stopped' : analysis.status === 'analyzing' ? 'Analyzing a captured frame…' : model.status === 'loading' ? 'Waiting for the model to load…' : `Automatic analysis · every ${state.interval || 5}s`;
+      const observations = [...(state.observations || [])].sort((a,b) => b.created - a.created);
+      const latest = observations[0];
+      $('latestText').textContent = latest?.text || 'The model’s description will appear here after the first frame is analyzed.';
+      $('latestText').classList.toggle('empty', !latest);
+      $('latency').textContent = latest ? latency(latest.latency_ms) : '—';
+      if (!latest) { $('observationTime').textContent = 'No frame analyzed'; $('observationDetail').textContent = 'Descriptions are based on individual frames, not continuous video.'; }
+      renderHistory(observations); updateAges(); updateButtons();
+    }
+    async function poll() {
+      if (polling) return;
+      polling = true;
+      try {
+        const next = await request('/api/state');
+        if (!next || !next.camera || !next.model) throw new Error('The local server returned an incomplete state.');
+        state = next; offline = false;
+        if (timestamp(state.server_time)) clockOffset = Number(state.server_time) * 1000 - Date.now();
+        message('transportError', ''); $('serviceText').textContent = 'Local server connected'; $('serviceStatus').style.color = 'var(--accent)';
+        render();
+      } catch (error) {
+        offline = true; $('serviceText').textContent = 'Local server unreachable'; $('serviceStatus').style.color = 'var(--amber)';
+        message('transportError', 'Connection to the lab server was lost. Any image and observation shown are from the last update. Retrying automatically.');
+        updateAges(); updateButtons();
+      } finally { polling = false; }
+    }
+    async function action(path, data) {
+      busy = true; message('actionError', ''); updateButtons();
+      try { await request(path, data); await poll(); return true; }
+      catch (error) { message('actionError', error.name === 'TimeoutError' ? 'The request timed out. Check the current camera and model status before trying again.' : error.message); return false; }
+      finally { busy = false; updateButtons(); }
+    }
+    $('cameraForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!$('cameraForm').reportValidity()) return;
+      const url = $('cameraUrl').value.trim();
+      if (!/^https?:\/\//i.test(url) && !/^rtsps?:\/\//i.test(url)) { message('actionError', 'Enter an HTTP, HTTPS, RTSP or RTSPS camera address, including the protocol.'); $('cameraUrl').focus(); return; }
+      const ok = await action('/api/camera', {url, name:$('cameraName').value.trim(), interval:Number($('interval').value)});
+      if (ok) { $('cameraUrl').value = ''; intervalEdited = false; }
+    });
+    $('stopButton').addEventListener('click', () => action('/api/stop', {}));
+    $('analyzeButton').addEventListener('click', () => action('/api/analyze', {}));
+    $('interval').addEventListener('input', () => { intervalEdited = true; });
+    $('interval').addEventListener('change', async () => {
+      if (!$('interval').reportValidity() || !state?.running || busy || offline) return;
+      if (await action('/api/settings', {interval:Number($('interval').value)})) intervalEdited = false;
+    });
+    async function loop() { await poll(); setTimeout(loop, 1000); }
+    updateButtons(); loop(); setInterval(updateAges, 1000);
+  </script>
+</body>
+</html>
