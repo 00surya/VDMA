@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>VMD Shield · Operations</title>
+    <meta
+      name="description"
+      content="Local camera operations and a city-response demonstration workspace."
+    />
+    <link rel="icon" href="/shield.svg" />
+    <link rel="stylesheet" href="/leaflet.css" />
+    <link rel="stylesheet" href="/styles.css?v=fight-responsive-3" />
+    <link rel="stylesheet" href="/map.css" />
+    <link rel="stylesheet" href="/player.css" />
+    <script type="module" src="/app.js?v=fight-observation-1"></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="/"
+        ><img src="/shield.svg" alt="" /><span>VMD <i>//</i> AI</span></a
+      >
+      <nav aria-label="Workspace">
+        <button class="nav" data-page="home">
+          <span data-icon="home"></span><span>Home</span>
+        </button>
+        <button class="nav active" data-page="operations">
+          <span data-icon="activity"></span><span>Dashboard</span>
+        </button>
+        <button class="nav" data-page="map">
+          <span data-icon="map"></span><span>Map View</span>
+        </button>
+        <button class="nav" data-page="heatmap">
+          <span data-icon="trend"></span><span>Safety Heatmap</span>
+        </button>
+        <button class="nav" data-page="analytics">
+          <span data-icon="chart"></span><span>Analytics</span>
+        </button>
+        <button class="nav" data-page="health">
+          <span data-icon="chip"></span><span>System Health</span>
+        </button>
+        <button class="nav" data-page="incidents">
+          <span data-icon="alert"></span><span>Incident Library</span
+          ><em id="incident-count">0</em>
+        </button>
+      </nav>
+      <button
+        id="mobile-sign-out"
+        class="mobile-sign-out icon-button"
+        aria-label="Sign out"
+        title="Sign out"
+      >
+        <span data-icon="logout"></span>
+      </button>
+      <div class="sidebar-bottom">
+        <div class="profile">
+          <span class="avatar" data-icon="user"></span>
+          <div>
+            <strong id="profile-title">Administrator</strong
+            ><small id="profile-scope">Citywide workspace</small>
+          </div>
+          <button
+            id="sign-out"
+            class="icon-button"
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <span data-icon="logout"></span>
+          </button>
+        </div>
+        <div class="system-status">
+          <span>Local engine</span
+          ><strong id="sidebar-status">Connecting</strong>
+        </div>
+        <div class="system-status">
+          <span>Workspace</span><span>Centre</span>
+        </div>
+      </div>
+    </aside>
+    <div class="app-shell">
+      <header class="page-header">
+        <div>
+          <h1 id="page-title">Live Operations</h1>
+          <p id="page-subtitle">
+            Real-time video monitoring and incident response
+          </p>
+        </div>
+        <div class="header-actions">
+          <label class="scope-field"
+            ><span class="sr-only">Sector view</span
+            ><select id="scope-filter" aria-label="Sector view"></select></label
+          ><button id="centre-settings" class="button secondary">Centre settings</button><button id="enable-alarm" class="button secondary">Enable alarm sound</button><time id="clock"></time>
+        </div>
+      </header>
+      <div id="notice" class="notice" role="status" hidden></div>
+      <div id="response-banner" class="response-banner" role="status" hidden></div>
+      <main>
+        <section id="operations" class="page operations-page">
+          <div class="operations-workspace">
+            <div class="operations-toolbar">
+              <div class="dataset-tabs" aria-label="Camera dataset">
+                <button id="connected-mode" class="selected">
+                  Connected <span id="camera-count">0 / 4</span></button
+                ><button id="network-mode">Demo network</button>
+              </div>
+              <div class="toolbar-actions">
+                <button id="manage-cameras" class="text-button">
+                  Manage cameras
+                </button>
+                <div class="segments">
+                  <button id="grid-button" class="selected" aria-pressed="true">
+                    <span data-icon="grid"></span>Grid</button
+                  ><button id="feed-button" aria-pressed="false">
+                    <span data-icon="list"></span>Feed
+                  </button>
+                </div>
+                <button id="source-button" class="button secondary">
+                  ＋ Add camera
+                </button>
+              </div>
+            </div>
+            <div id="network-note" class="dataset-note" hidden>
+              <span class="sample-dot"></span>Presentation data · simulated
+              camera network
+            </div>
+            <p class="camera-selection-help">Click a camera to select it. Double-click to open its feed.</p>
+            <div id="camera-grid" class="camera-grid"></div>
+            <div id="demo-controls" class="demo-controls" hidden>
+              <span>Synthetic pipeline test</span>
+              <div class="segments">
+                <button data-scenario="calm">Calm</button
+                ><button data-scenario="interaction">Interaction</button
+                ><button data-scenario="camera">Camera motion</button>
+              </div>
+            </div>
+            <div class="camera-tools">
+              <p id="workspace-caption">Up to four independent live inputs</p>
+              <button id="reset-demo" class="text-button" hidden>
+                Reset demo</button
+              ><button id="demo-button" class="text-button">
+                ＋ Add pipeline test
+              </button>
+            </div>
+          </div>
+          <aside class="inspector">
+            <div class="inspector-heading">
+              <h2>Incident Inspector</h2>
+              <p>Selected: <span id="inspector-camera">None</span></p>
+            </div>
+            <div class="inspector-body">
+              <div class="inspect-preview">
+                <img id="inspect-image" alt="Selected camera preview" hidden />
+                <div id="inspect-placeholder" data-icon="camera"></div>
+                <span
+                  class="inspect-alert"
+                  id="inspect-alert"
+                  data-icon="alert"
+                  hidden
+                ></span>
+                <div class="preview-caption">
+                  <strong id="inspect-name">No camera selected</strong
+                  ><span id="inspect-location">Select a camera to begin</span>
+                </div>
+              </div>
+              <div id="inspect-fight-timer" class="fight-timer" hidden></div>
+              <details class="camera-controls" id="selected-camera-controls" hidden>
+                <summary>Camera controls</summary>
+                <p id="camera-depth-status" class="field-help"></p>
+                <p id="camera-fight-status" class="field-help"></p>
+                <div class="source-controls">
+                <button id="edit-camera-settings" class="button secondary">
+                  Edit detection settings</button>
+                <button id="stop-button" class="button secondary">
+                  Stop camera</button
+                ><button id="restart-button" class="button secondary">
+                  Reconnect</button
+                ><button id="eco-button" class="button secondary" aria-pressed="false">
+                  Enable eco mode</button
+                ><button id="remove-button" class="text-button">
+                  Remove camera
+                </button>
+                </div>
+              </details>
+              <h3 class="section-label">INCIDENT</h3>
+              <div class="telemetry-card">
+                <span id="assessment-context">Detected event</span
+                ><strong id="assessment-title">Awaiting input</strong
+                ><small id="assessment-score">No incident selected</small>
+              </div>
+              <div class="telemetry-card">
+                <span>Location</span>
+                <p id="inspect-sector">Unassigned sector</p><button id="camera-location" class="text-button">Set camera place & coordinates</button>
+              </div>
+              <div class="telemetry-card">
+                <span>Timestamp</span>
+                <p class="mono" id="inspect-time">—</p>
+              </div>
+              <details class="technical-details">
+                <summary>Detection & signal details</summary>
+                <p id="inspect-objects" class="field-help" role="status">Weapon detection off</p>
+                <p>Current activity: <strong id="inspect-action" class="amber-text">Monitoring</strong></p>
+                <p class="inspector-note" id="assessment-text">Heuristic signals require review.</p>
+                <div class="mini-metrics">
+                  <div><span>People</span><strong id="people">—</strong></div>
+                  <div><span>FPS</span><strong id="fps">—</strong></div>
+                  <div><span>Score</span><strong id="score">—</strong></div>
+                  <div><span>Latency</span><strong id="latency">—</strong></div>
+                </div>
+                <dl id="signal-details"></dl>
+                <ul id="reasons"></ul>
+                <p id="buffer-value">Buffer: 0 / 10s</p>
+              </details>
+            </div>
+            <div class="dispatch-panel">
+              <button id="acknowledge-alert" class="button secondary" hidden>Acknowledge · stop escalation</button>
+              <div class="dispatch-slider">
+                <span id="dispatch-label">SLIDE TO DISPATCH</span
+                ><input
+                  id="dispatch-slider"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="0"
+                  aria-label="Slide to dispatch"
+                  disabled
+                />
+              </div>
+              <button id="dispatch-next" class="button primary" hidden>
+                Mark unit on scene
+              </button>
+              <p id="dispatch-state">Select an incident to dispatch</p>
+              <button id="hospital-response" class="button secondary" hidden>Request hospital</button>
+              <button id="false-positive" class="button outline" disabled>
+                Mark False Positive</button
+              ><button id="inspect-play" class="button secondary" hidden>Watch evidence</button>
+            </div>
+          </aside>
+        </section>
+        <section id="home" class="page padded-page" hidden>
+          <div class="section-top">
+            <div>
+              <h2 id="welcome-title">City command overview</h2>
+              <p class="muted">An overview of the demonstration network.</p>
+            </div>
+            <span class="sample-badge">PRESENTATION DATA</span>
+          </div>
+          <div id="overview-metrics" class="stat-grid four"></div>
+          <div class="overview-grid">
+            <article class="panel">
+              <div class="panel-heading">
+                <h2>Sector overview</h2>
+                <button class="text-button" data-page="map">Open map ↗</button>
+              </div>
+              <div id="sector-overview"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-heading">
+                <h2>Recent activity</h2>
+                <button class="text-button" data-page="incidents">
+                  View library ↗
+                </button>
+              </div>
+              <div id="overview-events" class="activity-list"></div>
+            </article>
+          </div>
+          <div class="overview-callout">
+            <div>
+              <h3>Your local camera pipeline is ready.</h3>
+              <p>
+                Connect a phone or CCTV feed to process real video on this
+                laptop.
+              </p>
+            </div>
+            <button class="button primary" data-page="operations">
+              Open Live Operations →
+            </button>
+          </div>
+        </section>
+        <section id="map" class="page map-page" hidden>
+          <div class="map-banner">
+            <span data-icon="map"></span>
+            <p>
+              <strong>Camera Map</strong> · Real camera locations saved from this laptop.
+            </p>
+            <span class="sample-badge">LOCAL DATA</span>
+          </div>
+          <div class="map-location-bar">
+            <span data-map-status role="status">Laptop location not acquired</span>
+            <div>
+              <button data-map-locate class="button secondary">
+                Use my location
+              </button>
+            </div>
+          </div>
+          <div class="map-layout">
+            <div id="deployment-map" class="map-canvas">
+              <div class="map-controls">
+                <button id="map-zoom-in" aria-label="Zoom deployment map in">
+                  ＋</button
+                ><button id="map-zoom-out" aria-label="Zoom deployment map out">
+                  −</button
+                ><button
+                  id="map-reset"
+                  aria-label="Reset deployment map"
+                  title="Show saved locations"
+                >
+                  ⌖
+                </button>
+              </div>
+            </div>
+            <aside class="map-detail panel">
+              <span class="section-label">CAMERA DETAILS</span>
+              <h2 id="map-sector-title">No camera selected</h2>
+              <p id="map-sector-name">Connect a camera to see its location.</p>
+              <div id="map-sector-stats"></div>
+              <button id="map-open-camera" class="button secondary">
+                View camera →
+              </button>
+            </aside>
+          </div>
+        </section>
+        <section id="heatmap" class="page map-page" hidden>
+          <div class="map-banner">
+            <span data-icon="target"></span>
+            <p>
+              <strong>Incident Heatmap</strong> · Saved incidents at their original locations. Larger circles mean more incidents, not a safety score.
+            </p>
+            <span class="sample-badge">LOCAL DATA</span>
+          </div>
+          <div class="map-location-bar">
+            <span data-map-status role="status">Laptop location not acquired</span>
+            <div>
+              <button data-map-locate class="button secondary">
+                Use my location
+              </button>
+            </div>
+          </div>
+          <div class="heatmap-stage">
+            <div id="safety-map" class="map-canvas">
+              <div class="map-controls right-controls">
+                <button id="heat-zoom-in" aria-label="Zoom safety map in">
+                  ＋</button
+                ><button id="heat-zoom-out" aria-label="Zoom safety map out">
+                  −</button
+                ><button
+                  id="heat-reset"
+                  aria-label="Reset safety map"
+                  title="Show saved locations"
+                >
+                  ⌖
+                </button>
+              </div>
+            </div>
+            <div class="map-floating map-statistics">
+              <h3>Actual coverage</h3>
+              <dl id="safety-statistics"></dl>
+              <p id="safety-updated"></p>
+            </div>
+            <div class="map-floating map-legend">
+              <h3>Map legend</h3>
+              <div><i class="legend-dot green"></i><p>Camera<small>Saved camera location</small></p></div>
+              <div><i class="legend-dot red"></i><p>Incident activity<small>Saved incidents · review required</small></p></div>
+              <div><i class="legend-dot blue"></i><p>Laptop location<small>Browser estimate and accuracy</small></p></div>
+            </div>
+            <div id="heat-selection" class="heat-selection" role="status"></div>
+          </div>
+        </section>
+        <section id="analytics" class="page padded-page" hidden>
+          <div class="section-top">
+            <span id="analytics-provenance" class="sample-badge">SAVED CAMERA DATA</span>
+            <div class="filter-controls">
+              <label>Period<select id="analytics-period">
+                  <option value="7">Last 7 days</option>
+                  <option value="30">Last 30 days</option>
+                </select></label
+              >
+            </div>
+          </div>
+          <p id="analytics-status" class="field-help" role="status">Loading saved camera data…</p>
+          <button id="analytics-retry" class="button secondary" type="button" hidden>Retry analytics</button>
+          <div id="analytics-metrics" class="stat-grid three"></div>
+          <article class="panel chart-panel">
+            <div class="panel-heading">
+              <h2 id="trend-title">Incident Trends (Last 7 Days)</h2>
+              <span id="analytics-total" class="muted"></span>
+            </div>
+            <div id="incident-trend"></div>
+          </article>
+          <div class="two-columns">
+            <article class="panel chart-panel">
+              <h2>Incident Types</h2>
+              <div id="incident-types"></div>
+            </article>
+            <article class="panel chart-panel">
+              <h2>Incidents by Camera</h2>
+              <div id="incidents-sector"></div>
+            </article>
+          </div>
+          <article id="crowd-panel" class="panel" hidden>
+            <h2>Live-camera crowd observations · last 24 hours</h2>
+            <div id="crowd-table" class="table-scroll"></div>
+          </article>
+          <p id="analytics-footnote" class="page-footnote">
+            Charts use saved physical-camera incidents. Synthetic tests, recordings and false positives are excluded.
+          </p>
+        </section>
+        <section id="health" class="page padded-page" hidden>
+          <div class="section-top">
+            <div>
+              <span id="health-provenance" class="sample-badge"
+                >LOCAL ENGINE</span
+              >
+              <p id="health-description" class="muted">
+                Observed status from this laptop.
+              </p>
+            </div>
+            <div class="health-heading">
+              <div>
+                <strong id="health-percent">—</strong
+                ><span>Components online</span>
+              </div>
+              <label class="sr-only" for="health-dataset">Health dataset</label
+              ><select id="health-dataset">
+                <option value="local">Local engine</option>
+                <option value="sample">Presentation infrastructure</option>
+              </select>
+            </div>
+          </div>
+          <div id="health-metrics" class="stat-grid four"></div>
+          <div class="table-scroll health-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Component name</th>
+                  <th>Status</th>
+                  <th>Latency</th>
+                  <th>Uptime</th>
+                  <th>Last check</th>
+                </tr>
+              </thead>
+              <tbody id="health-components"></tbody>
+            </table>
+          </div>
+          <p class="page-footnote" id="health-footnote"></p>
+        </section>
+        <section id="incidents" class="page padded-page" hidden>
+          <section id="recordings-panel" class="recordings-panel" aria-labelledby="recordings-title">
+            <div class="recordings-heading">
+              <div><h2 id="recordings-title">Video library</h2><p class="field-help">Upload recordings to watch or analyse with your chosen settings. Files stay on this device.</p></div>
+              <form id="recording-upload" class="recording-upload">
+                <label>Video file<input id="recording-file" type="file" accept=".mp4,.avi,.mov,.mkv,.webm,.m4v" required /></label>
+                <button id="recording-submit" class="button primary" type="submit">Upload video</button>
+              </form>
+            </div>
+            <p id="recording-status" class="field-help" role="status">MP4, AVI, MOV, MKV, WebM or M4V · up to 1 GB</p>
+            <div id="recording-list"></div>
+          </section>
+          <div class="section-top">
+            <span class="muted" id="library-summary"></span>
+            <div class="filter-controls">
+              <label
+                >Dataset<select id="library-dataset">
+                  <option value="local">Local evidence</option>
+                  <option value="sample">Presentation</option>
+                </select></label
+              ><label
+                >Review<select id="incident-filter">
+                  <option value="all">All incidents</option>
+                  <option value="unreviewed">Needs review</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="false_positive">False positives</option>
+                </select></label
+              >
+            </div>
+          </div>
+          <div id="incident-library"></div>
+        </section>
+      </main>
+    </div>
+    <div id="toast" class="toast" role="status" hidden></div>
+    <dialog id="media-player" aria-labelledby="playback-title">
+      <div class="playback-heading"><div><span class="section-label">RECORDED VIDEO · LOCAL PLAYBACK</span><h2 id="playback-title">Evidence</h2></div>
+        <button id="close-player" class="icon-button" aria-label="Close player">×</button></div>
+      <div class="playback-stage">
+        <video id="playback-video" playsinline preload="metadata" aria-label="Recorded video playback"></video>
+        <div class="playback-overlay"><span id="playback-state">LOADING</span><span id="playback-clock">Recording time</span></div>
+      </div>
+      <div class="playback-timeline">
+        <div class="playback-timebar"><span id="playback-position">00:00:00 / 00:00:00</span><button id="playback-event" class="text-button" data-playback-control hidden>Jump to event</button></div>
+        <label class="sr-only" for="playback-timeline">Playback timeline</label>
+        <input id="playback-timeline" type="range" min="0" max="0" step="0.1" value="0" data-playback-control disabled />
+        <div class="playback-timebar"><span>00:00:00</span><span id="playback-duration">00:00:00</span></div>
+      </div>
+      <div class="playback-controls">
+        <div class="playback-buttons">
+          <button id="playback-start" aria-label="Go to start" data-playback-control disabled>|◀</button>
+          <button data-seek="-10" aria-label="Back 10 seconds" data-playback-control disabled>−10s</button>
+          <button id="playback-toggle" data-playback-control disabled>Play</button>
+          <button data-seek="10" aria-label="Forward 10 seconds" data-playback-control disabled>+10s</button>
+          <button id="playback-end" aria-label="Go to end" data-playback-control disabled>▶|</button>
+        </div>
+        <label>Speed<select id="playback-speed" data-playback-control disabled><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <button id="playback-fullscreen">Fullscreen</button><a id="playback-download" class="clip-link">Download original ↗</a>
+      </div>
+      <p id="playback-message" role="status"></p>
+    </dialog>
+    <dialog id="camera-viewer" aria-labelledby="viewer-title">
+      <div class="viewer-heading">
+        <div>
+          <span class="section-label">CAMERA ANALYSIS</span>
+          <h2 id="viewer-title">Camera</h2>
+        </div>
+        <div class="viewer-actions">
+          <label class="sr-only" for="viewer-camera">Choose camera</label>
+          <select id="viewer-camera"></select>
+          <button
+            type="button"
+            id="close-camera-viewer"
+            class="button secondary"
+          >
+            ← Back to cameras
+          </button>
+        </div>
+      </div>
+      <div id="selected-feeds" hidden>
+        <article class="feed-card">
+          <div class="feed-top">
+            <h2>Video &amp; pose</h2>
+            <span id="feed-status" class="mono">WAITING</span>
+          </div>
+          <div class="video-stage">
+            <img
+              id="pose-image"
+              alt="Selected camera with pose and incident overlays"
+              hidden
+            />
+            <div id="pose-empty" class="feed-empty">
+              <span data-icon="camera"></span>
+              <p>No image available</p>
+            </div>
+          </div>
+          <div class="feed-bottom">
+            <span id="feed-source">No camera selected</span>
+            <span id="frame-number" class="mono">FRAME —</span>
+          </div>
+        </article>
+        <article class="feed-card depth-card">
+          <div class="feed-top">
+            <h2>Depth heatmap</h2>
+            <span id="depth-label" class="mono">WAITING</span>
+          </div>
+          <div class="depth-stage">
+            <img
+              id="depth-image"
+              alt="Selected camera relative inverse-depth heatmap"
+              hidden
+            />
+            <div id="depth-empty" class="feed-empty">
+              <span data-icon="map"></span>
+              <p id="depth-message">Waiting for a depth frame</p>
+            </div>
+          </div>
+          <div class="feed-bottom depth-footer">
+            <span
+              >Far <i class="depth-gradient" aria-hidden="true"></i> Near</span
+            >
+            <span>Relative depth · sampled independently</span>
+          </div>
+        </article>
+      </div>
+      <div id="viewer-fight-timer" class="fight-timer" hidden></div>
+      <div class="viewer-assessment" role="status">
+        <strong id="viewer-assessment">No active alert</strong>
+        <p id="viewer-reason">Waiting for camera status</p>
+      </div>
+      <details class="object-panel" open>
+        <summary>Knife &amp; gun detections <span id="object-label" class="mono">OFF</span></summary>
+        <p id="object-message" class="field-help">Enable knife and gun detection when connecting a camera.</p>
+        <div class="object-stage">
+          <img id="object-image" alt="Independently sampled camera frame with knife and gun labels and best-effort head blur" hidden />
+          <p id="object-empty">No weapon detection frame available</p>
+        </div>
+        <p id="object-list" class="field-help"></p>
+        <p class="field-help">Knives and guns are checked even with one person or no people visible. Fresh detections update the Action field. Labels are model predictions; a missed label does not mean an object is absent.</p>
+      </details>
+    </dialog>
+    <dialog
+      id="camera-manager"
+      aria-labelledby="camera-manager-title"
+      aria-describedby="camera-capacity"
+    >
+      <div class="dialog-heading">
+        <div>
+          <span class="section-label">CONNECTED INPUTS</span>
+          <h2 id="camera-manager-title">Manage cameras</h2>
+        </div>
+        <button
+          type="button"
+          id="close-camera-manager"
+          class="icon-button"
+          aria-label="Close camera manager"
+        >
+          ×
+        </button>
+      </div>
+      <p id="camera-capacity" class="camera-capacity" role="status"></p>
+      <p class="field-help">
+        Stopped and failed sources still occupy a slot. Remove stops that source
+        and frees its slot; saved incidents and clips are kept. Demo network
+        cards are separate sample data.
+      </p>
+      <div id="managed-cameras"></div>
+      <p id="camera-manager-error" class="error-text" role="alert"></p>
+      <p id="camera-manager-status" class="field-help" role="status"></p>
+      <button id="manager-add-camera" class="button primary">
+        ＋ Add camera
+      </button>
+    </dialog>
+    <dialog id="source-dialog" aria-labelledby="source-dialog-title">
+      <form id="source-form">
+        <div class="dialog-heading">
+          <div>
+            <span class="section-label">LOCAL CAMERA INPUT</span>
+            <h2 id="source-dialog-title">Connect a camera</h2>
+          </div>
+          <button
+            type="button"
+            id="close-dialog"
+            class="icon-button"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        <label
+          >Camera name<input
+            name="name"
+            maxlength="64"
+            placeholder="Stage / Phone camera"
+            autocomplete="off" /></label
+        ><label
+          >Video source<input
+            name="source"
+            required
+            placeholder="http://192.0.0.4:8080/video"
+            autocomplete="off"
+        /></label>
+        <p class="field-help">
+          Phone stream URL, webcam index (0), or an absolute video path.
+          Camera settings are saved for automatic recovery. A new camera always uses this setup form.
+        </p>
+        <div id="source-location-panel">
+          <label>Place name (optional)<input name="location_place" maxlength="200" placeholder="Building / entrance · defaults to Laptop location" /></label>
+          <p class="field-help">Location is optional. Webcams and IP cameras use this laptop’s browser location when available; you can connect without it and retry later. Recordings do not receive a current location.</p>
+          <p id="source-location-status" class="field-help" role="status"></p>
+          <button id="source-location-retry" type="button" class="text-button">Retry laptop location</button>
+        </div>
+        <label>Sector<select name="sector" id="source-sector"></select></label>
+        <div class="form-grid" id="camera-setting-fields">
+          <label
+            >Compute device<select name="device">
+              <option value="auto">Automatic</option>
+              <option value="cpu">CPU</option>
+              <option value="mps">Apple Silicon (MPS)</option>
+              <option value="cuda:0">NVIDIA (CUDA)</option>
+            </select></label
+          ><label
+            >Fight detection<select name="detection_mode">
+              <option value="depth_confirmed">Depth-confirmed · at least 3 seconds</option>
+              <option value="responsive">Review only · no confirmed fight alerts</option>
+            </select></label
+          ><label
+            >Knife &amp; gun detection<select name="object_detection">
+              <option value="true">Assalim Normal_Compressed · knives and guns</option>
+              <option value="false">Off</option>
+            </select></label
+          ><label
+            >Eco mode<select name="eco_mode">
+              <option value="false">Off · continuous analysis</option>
+              <option value="true">On · reduce inference during quiet scenes</option>
+            </select></label
+          ><label
+            >Relative depth<select name="depth">
+              <option value="ZipDepth">ZipDepth · lightweight CPU model</option>
+              <option value="off">Off · fastest</option>
+              <option value="MiDaS_small">MiDaS Small</option>
+              <option value="DPT_Hybrid">DPT Hybrid</option>
+              <option value="DPT_Large">DPT Large</option>
+            </select></label
+          ><label
+            >Depth updates / second<input
+              name="depth_fps"
+              type="number"
+              min=".1"
+              max="2"
+              step=".1"
+              value="1"
+              required /></label
+          ><label
+            >Fight score threshold<input
+              name="threshold"
+              type="number"
+              min=".4"
+              max=".95"
+              step=".01"
+              value=".60"
+              required /></label
+          ><label
+            >Sustained interaction observation (seconds)<input
+              name="hold_seconds"
+              type="number"
+              min=".3"
+              max="5"
+              step=".1"
+              value=".7"
+              required
+          /></label>
+          <label>Fight escalation time (seconds)<input name="fight_confirmation_seconds" type="number" min=".5" max="10" step=".1" value="3" required /></label>
+          <label>Analysis frames / second<input name="target_fps" type="number" min="2" max="30" step="1" value="8" required /></label>
+          <label>Weapon updates / second<input name="object_fps" type="number" min=".2" max="2" step=".1" value="1" required /></label>
+        </div>
+        <p class="field-help" id="camera-settings-help">
+          Higher score thresholds are less sensitive; this is a motion score, not a probability.
+          Supported strikes start Possible fight immediately. Sustained interaction observation is the review window for close-contact grappling.
+          Fight escalation time sets how long supported striking must continue (0.5–10 seconds); fresh matching depth is still required.
+          The live timer pauses or resets when supporting evidence breaks. Lowering the score threshold does not bypass pose, motion or depth checks.
+          Review-only mode cannot confirm fights.
+          Eco mode reduces processing in quiet scenes. Depth and weapons run independently.
+        </p>
+        <p id="form-error" class="error-text" role="alert"></p>
+        <button id="source-submit" class="button primary" type="submit">
+          Connect & start processing →
+        </button>
+      </form>
+    </dialog>
+    <dialog id="camera-settings-dialog" aria-labelledby="camera-settings-title" aria-describedby="camera-settings-context">
+      <form id="camera-settings-form">
+        <div class="dialog-heading">
+          <div><span class="section-label">SAVED CAMERA SETTINGS</span><h2 id="camera-settings-title">Edit detection settings</h2></div>
+          <button type="button" id="close-camera-settings" class="icon-button" aria-label="Close camera settings">×</button>
+        </div>
+        <p id="camera-settings-context" class="field-help"></p>
+        <fieldset id="camera-settings-inputs"></fieldset>
+        <p id="camera-settings-error" class="error-text" role="alert"></p>
+        <button id="camera-settings-save" class="button primary" type="submit">Save settings</button>
+      </form>
+    </dialog>
+    <dialog id="hospital-dialog" aria-labelledby="hospital-title" aria-describedby="hospital-context">
+      <div class="hospital-symbol" aria-hidden="true">+</div>
+      <h2 id="hospital-title">Hospital needed?</h2>
+      <p id="hospital-context">Authority calls have been requested.</p>
+      <div class="hospital-choices">
+        <button id="hospital-yes" class="button primary" type="button">Yes, call hospital</button>
+        <button id="hospital-no" class="button secondary" type="button" autofocus>No, authorities only</button>
+      </div>
+      <p id="hospital-error" class="error-text" role="alert"></p>
+    </dialog>
+    <dialog id="centre-dialog"><form id="centre-form">
+      <div class="dialog-heading"><h2>Centre & response contacts</h2><button type="button" id="close-centre" class="icon-button" aria-label="Close centre settings">×</button></div>
+      <div id="centre-edit-fields"></div>
+      <label><input type="checkbox" id="calling-enabled" /> Enable Twilio voice calls for this centre</label>
+      <p id="calling-status" class="field-help"></p>
+      <p class="field-help">Dispatch calls your saved authorities, then asks whether a hospital is needed. Each number is called once per incident. Acknowledge stops calls that have not yet been submitted.</p>
+      <details><summary>Recent response details</summary><div id="centre-response-history" class="response-history"></div></details>
+      <details><summary>Optional video-link SMS · separate setup</summary>
+      <label><input type="checkbox" id="messaging-enabled" /> Enable SMS dispatch for this centre</label>
+      <p id="messaging-status" class="field-help"></p>
+      <p class="field-help">SMS includes the camera place, coordinates and a video link. This needs public video hosting; voice calls work without it.</p></details>
+      <p id="centre-error" class="error-text" role="alert"></p><button class="button primary" type="submit">Save centre</button>
+    </form></dialog>
+    <dialog id="location-dialog"><form id="location-form">
+      <div class="dialog-heading"><h2>Camera location</h2><button type="button" id="close-location" class="icon-button" aria-label="Close location">×</button></div>
+      <p class="field-help">Use this laptop’s browser location for the camera. Saved for future incidents; earlier incident locations stay unchanged.</p>
+      <label>Place name (optional)<input name="place" maxlength="200" placeholder="Laptop location" /></label>
+      <p id="location-status" class="field-help" role="status"></p>
+      <button id="location-retry" class="text-button" type="button">Retry laptop location</button>
+      <p id="location-error" class="error-text" role="alert"></p><button id="location-save" class="button primary" type="submit">Save laptop location</button>
+    </form></dialog>
+  </body>
+</html>

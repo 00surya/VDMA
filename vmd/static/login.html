@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Sign in · VMD Shield</title>
+    <link rel="icon" href="/shield.svg" />
+    <link rel="stylesheet" href="/auth.css" />
+    <script type="module" src="/login.mjs"></script>
+  </head>
+  <body>
+    <main class="login-layout">
+      <section class="login-story" aria-label="VMD Shield operations">
+        <a href="/login.html" class="login-brand"
+          ><img src="/shield.svg" alt="" /><strong
+            >VMD <span>//</span> AI</strong
+          ></a
+        >
+        <div class="story-copy">
+          <span class="eyebrow">SHIELD OPERATIONS PLATFORM</span>
+          <h1>A clearer view.<br />A coordinated response.</h1>
+          <p>
+            Video, motion and depth intelligence.<br />One workspace for every
+            camera and every sector.
+          </p>
+        </div>
+        <div class="network-visual" aria-hidden="true">
+          <div class="network-ring ring-one"></div>
+          <div class="network-ring ring-two"></div>
+          <div class="network-ring ring-three"></div>
+          <div class="network-core"><img src="/shield.svg" alt="" /></div>
+          <span class="network-node node-one">V<span>VIDEO</span></span
+          ><span class="network-node node-two">M<span>MOTION</span></span
+          ><span class="network-node node-three">D<span>DEPTH</span></span>
+        </div>
+        <div class="story-footer">
+          <span>VMD SHIELD</span><span>LOCAL EDGE INTELLIGENCE</span>
+        </div>
+      </section>
+      <section class="login-panel">
+        <div class="login-top">
+          <span class="workspace-chip">OPERATIONS CONSOLE</span
+          ><span class="muted">v0.2</span>
+        </div>
+        <form id="login-form">
+          <div class="login-symbol"><img src="/shield.svg" alt="" /></div>
+          <h2 id="login-title">Centre sign in</h2>
+          <p class="login-description" id="login-description">Connecting to the local service…</p>
+          <div id="centre-fields"></div>
+          <label class="field">Password<input name="password" id="password" type="password" minlength="10" maxlength="200" autocomplete="current-password" required /></label>
+          <button type="submit" class="sign-in-button" disabled>Continue →</button>
+          <p class="demo-access">One centre per installation. Contacts and password hash are stored locally.</p>
+          <p class="login-error" id="login-error" role="alert"></p>
+        </form>
+        <div class="login-bottom">
+          <span>© 2026 VMD Shield</span><span>Centre operations</span>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

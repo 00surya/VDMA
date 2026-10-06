@@ -1,0 +1,190 @@
+/* Street-map styles are scoped so the existing operations UI is unaffected. */
+.map-location-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 12px 24px;
+  color: #a8b6c0;
+  background: #101619;
+  border-bottom: 1px solid #29343b;
+  font-size: 12px;
+}
+.map-location-bar > span {
+  flex: 1;
+  min-width: 150px;
+  line-height: 1.6;
+}
+.map-location-bar > div {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.map-location-bar .button {
+  font-size: 12px;
+  padding: 9px 12px;
+  white-space: nowrap;
+}
+.map-location-bar .text-button {
+  font-size: 12px;
+}
+.map-location-bar [data-state="error"] {
+  color: #f5bd78;
+}
+.map-page .map-canvas {
+  isolation: isolate;
+}
+.map-page .coverage-map {
+  z-index: 0;
+  background: #182126;
+  font-family: inherit;
+}
+/* Tone only the basemap; safety colors, your location and controls remain true. */
+.map-page .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) saturate(0.5) brightness(0.8)
+    contrast(0.9);
+}
+.map-page .leaflet-control-attribution {
+  background: #111b22ed;
+  color: #d7dfe5;
+  font-size: 10px;
+  padding: 4px 7px;
+}
+.map-page .leaflet-control-attribution a {
+  color: #8cd8f3;
+}
+.map-page .leaflet-control-scale-line {
+  background: #111b22e6;
+  border-color: #9caeb9;
+  color: #e0e9ef;
+  text-shadow: none;
+}
+.map-page .leaflet-container a.leaflet-popup-close-button {
+  color: #b5c6d1;
+}
+.map-page .leaflet-popup-content-wrapper,
+.map-page .leaflet-popup-tip {
+  background: #171e24;
+  color: #e8edf2;
+}
+.map-page .leaflet-popup-content-wrapper {
+  border: 1px solid #41505a;
+  border-radius: 10px;
+  box-shadow: 0 10px 35px #0009;
+}
+.map-page .leaflet-popup-content {
+  margin: 18px;
+  line-height: 1.5;
+}
+.street-popup .section-label {
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #8f9eaa;
+}
+.street-popup h3 {
+  font-size: 16px;
+  margin: 10px 0;
+}
+.street-popup p {
+  font-size: 12px;
+  color: #c2cbd2;
+  margin: 9px 0;
+}
+.street-popup small {
+  font-size: 10px;
+  color: #8da0ad;
+}
+.street-marker {
+  background: transparent;
+  border: 0;
+}
+.street-pin {
+  --pin: #10b981;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: #fff;
+  background: var(--pin);
+  border: 2px solid #eef7f9;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--pin) 18%, transparent),
+    0 3px 12px #0009;
+}
+.street-pin.red {
+  --pin: #ef4444;
+}
+.street-pin.orange {
+  --pin: #e68b25;
+}
+.street-pin.yellow {
+  --pin: #c8a30e;
+}
+.street-pin .icon {
+  width: 18px;
+  height: 18px;
+}
+.street-marker.selected .street-pin,
+.street-marker:focus-visible .street-pin {
+  outline: 2px solid white;
+  outline-offset: 5px;
+}
+.map-page .street-label {
+  background: #10191feb;
+  border: 1px solid #44515a;
+  color: #f2f5f7;
+  box-shadow: 0 3px 10px #0007;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 5px 7px;
+  letter-spacing: 0.4px;
+  border-radius: 4px;
+}
+.map-page .street-label:before {
+  display: none;
+}
+.map-tile-notice {
+  position: absolute;
+  bottom: 45px;
+  left: 15px;
+  right: 15px;
+  z-index: 2;
+  background: #2d2020ed;
+  border: 1px solid #854343;
+  color: #f5c4b9;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 12px;
+}
+.map-tile-notice .text-button {
+  margin-left: 12px;
+  color: #fff;
+}
+.map-page .map-layout,
+.map-page .heatmap-stage {
+  min-height: calc(100vh - 214px);
+}
+.map-page .heatmap-stage {
+  min-height: max(740px, calc(100vh - 214px));
+}
+@media (max-width: 800px) {
+  .map-location-bar {
+    padding: 12px 15px;
+  }
+  .map-location-bar > span {
+    flex-basis: 100%;
+  }
+  .map-page .heatmap-stage {
+    min-height: 680px;
+  }
+  .map-page .map-layout {
+    min-height: 0;
+  }
+  .map-page .leaflet-control-attribution {
+    font-size: 9px;
+  }
+}
