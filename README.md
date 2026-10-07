@@ -4,7 +4,6 @@ VDMA turns camera feeds and recorded video into reviewable incident alerts, save
 
 This is a working prototype. It supports up to four camera/analysis sessions, but that limit is an application setting, not proof that four busy feeds fit on a 4 GB device. Fight and snatching decisions are rule-based, not a trained video violence classifier. An alert, a detector confidence score and a human-confirmed incident are different things.
 
-**Team:** Tensor Titans — Surya Verma (Team Lead), Swapnil Gaur.
 
 ## See it in action
 
