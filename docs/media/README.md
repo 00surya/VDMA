@@ -4,7 +4,7 @@ These are the video and original screenshots selected for the public VDMA README
 
 | Asset | What it shows |
 | --- | --- |
-| `evidence.mp4` | Supplied source footage; 86.32 seconds, 534 × 480, 25 FPS. It has no VDMA overlays and is not an accuracy benchmark. A GitHub-hosted copy provides inline README playback. |
+| `ev1.mp4` | Supplied VDMA demo; 19.7 seconds, 2520 × 1080, 30 FPS. It shows video analysis, sampled depth and a possible-snatching review alert. It is not an accuracy benchmark. A GitHub-hosted copy provides inline README playback. |
 | `dashboard.png` | Original 5 October 2026 presentation screenshot at 8:04:28 PM: camera tiles and incident inspector. |
 | `pose-depth.png` | Original presentation screenshot at 8:02:16 PM: pose tracks and sampled relative depth. |
 | `incident-player.png` | Original presentation screenshot at 8:02:48 PM: saved evidence playback. |

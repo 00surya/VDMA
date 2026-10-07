@@ -45,7 +45,7 @@ recordings/
 *.webm
 
 # The user-selected public README demo; other recordings remain private.
-!docs/media/evidence.mp4
+!docs/media/ev1.mp4
 
 # Private configuration and runtime artifacts.
 *credentials*.json

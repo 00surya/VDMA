@@ -12,11 +12,11 @@ This is a working prototype. It supports up to four camera/analysis sessions, bu
 
 The dashboard brings camera views, evidence playback and response controls into one place. The screenshots below are the original prototype images from our Hackdays presentation. **“Possible fight” is a review warning**, not a confirmed incident.
 
-### Watch the sample footage
+### Watch the demo
 
-https://github.com/user-attachments/assets/3bb7a94b-47c0-4fd7-be4c-ba5d8f573119
+https://github.com/user-attachments/assets/acef60d4-8c75-423e-9bb5-45378bec69a8
 
-[Open or download the full video](docs/media/evidence.mp4) · 1 min 26 sec · 6 MB. This is the supplied source footage, without VDMA overlays. It is an example input, not a detection-accuracy result.
+[Open or download the full video](docs/media/ev1.mp4) · 19.7 sec · 14.7 MB. The demo shows VDMA's video analysis, sampled depth view and a **Possible snatching / Review** alert. It shows one prototype session, not a detection-accuracy benchmark.
 
 ### What the operator sees
 
@@ -345,7 +345,7 @@ Centre passwords use salted scrypt hashes; dashboard sessions use expiring HttpO
 
 `python -m vmd`, `python -m vmd.voice` and the login helper load root `.env` through `python-dotenv` when installed; exported settings win. Direct Uvicorn launch needs explicit `--env-file .env` or exported configuration.
 
-Keep secrets, camera URLs, databases, runtime recordings, caches, virtual environments and model weights out of Git. The explicitly selected public demo at `docs/media/evidence.mp4` is the only video exception. Presentation PDFs/PPTs and generated `output/` artifacts are excluded from this code publication. Checked-in static UI assets are still required. Head blur is best effort, not guaranteed anonymization; uploaded originals/evidence can remain sensitive.
+Keep secrets, camera URLs, databases, runtime recordings, caches, virtual environments and model weights out of Git. The explicitly selected public demo at `docs/media/ev1.mp4` is the only video exception. Presentation PDFs/PPTs and generated `output/` artifacts are excluded from this code publication. Checked-in static UI assets are still required. Head blur is best effort, not guaranteed anonymization; uploaded originals/evidence can remain sensitive.
 
 ## Performance and the 4 GB target
 
