@@ -57,6 +57,10 @@ class StartRequest(BaseModel):
     detection_mode: Literal["responsive", "depth_confirmed"] = "responsive"
     eco_mode: StrictBool = False
     object_detection: StrictBool = False
+    unattended_objects: StrictBool = False
+    snatching_vehicles: StrictBool = False
+    unattended_seconds: float = Field(default=60, ge=10, le=3600, allow_inf_nan=False)
+    person_down_seconds: float = Field(default=3, ge=1, le=60, allow_inf_nan=False)
     object_fps: float = Field(default=1, ge=.2, le=2)
     threshold: float = Field(default=Rules.threshold, ge=.4, le=.95)
     hold_seconds: float = Field(default=Rules.hold_seconds, ge=.3, le=5)
@@ -71,6 +75,10 @@ class StartRequest(BaseModel):
             raise ValueError("Eco mode is available for camera and recorded-video inputs")
         if self.object_detection and self.mode != "live":
             raise ValueError("Object detection needs a camera or recorded-video input")
+        if self.unattended_objects and self.mode != "live":
+            raise ValueError("Unattended-item detection needs a camera or recorded-video input")
+        if self.snatching_vehicles and self.mode != "live":
+            raise ValueError("Rider-snatching review needs a camera or recorded-video input")
         if self.detection_mode == "depth_confirmed" and (self.depth == "off" or self.depth_fps < .5):
             raise ValueError("Depth-confirmed detection needs a depth model sampling at least 0.5 times per second")
         if self.recording_id and (self.mode != 'live' or self.source.strip()):
@@ -242,20 +250,18 @@ def create_app(data_dir=None, model_dir=None):
         return {"scenario": body.scenario}
 
     @app.get("/api/frame/{view}")
-    def frame(view: Literal["pose", "depth"]):
-        with app.state.engine.lock:
-            jpeg = app.state.engine.frames.get(view)
-            meta = app.state.engine.depth_metadata(app.state.engine.state)
+    def frame(view: Literal["pose", "depth"], overlays: bool = True):
+        values, state = app.state.engine.preview_frames(overlays)
+        jpeg = values.get(view)
+        meta = app.state.engine.depth_metadata(state)
         if view == "depth" and (meta["stale"] or meta["status"] == "error"):
             jpeg = None
         return Response(jpeg, media_type="image/jpeg") if jpeg else Response(status_code=204)
 
     @app.get("/api/frames")
-    def frames():
-        with app.state.engine.lock:
-            # Atomic snapshot, with separate provenance for lower-rate depth.
-            values = dict(app.state.engine.frames)
-            state = dict(app.state.engine.state)
+    def frames(overlays: bool = True):
+        # Atomic snapshot, with separate provenance for lower-rate depth.
+        values, state = app.state.engine.preview_frames(overlays)
         depth_meta = app.state.engine.depth_metadata(state)
         if depth_meta["stale"] or depth_meta["status"] == "error":
             values["depth"] = None
@@ -268,9 +274,8 @@ def create_app(data_dir=None, model_dir=None):
             raise HTTPException(404, "Camera not found")
         return engine
 
-    def frame_bundle(engine, depth=True):
-        with engine.lock:
-            values, state = dict(engine.frames), dict(engine.state)
+    def frame_bundle(engine, depth=True, overlays=True):
+        values, state = engine.preview_frames(overlays)
         meta = engine.depth_metadata(state)
         if meta["stale"] or meta["status"] == "error": values["depth"] = None
         objects = engine.object_metadata(state)
@@ -306,14 +311,14 @@ def create_app(data_dir=None, model_dir=None):
         return engine.snapshot()
 
     @app.get("/api/camera-frames")
-    def camera_frames():
+    def camera_frames(overlays: bool = True):
         with app.state.camera_lock:
             engines = list(app.state.cameras.values())
-        return {engine.camera_id: frame_bundle(engine, depth=False) for engine in engines}
+        return {engine.camera_id: frame_bundle(engine, depth=False, overlays=overlays) for engine in engines}
 
     @app.get("/api/cameras/{camera_id}/frames")
-    def camera_detail_frames(camera_id: str):
-        return frame_bundle(camera(camera_id))
+    def camera_detail_frames(camera_id: str, overlays: bool = True):
+        return frame_bundle(camera(camera_id), overlays=overlays)
 
     @app.post("/api/cameras/{camera_id}/stop")
     def stop_camera(camera_id: str):

@@ -44,6 +44,9 @@ recordings/
 *.mkv
 *.webm
 
+# The user-selected public README demo; other recordings remain private.
+!docs/media/evidence.mp4
+
 # Private configuration and runtime artifacts.
 *credentials*.json
 *client_secret*.json

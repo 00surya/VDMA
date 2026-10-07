@@ -11,7 +11,8 @@ from .engine import Engine
 
 EDITABLE_SETTINGS = ('device', 'depth', 'depth_fps', 'detection_mode', 'eco_mode',
                      'object_detection', 'object_fps', 'threshold', 'hold_seconds',
-                     'fight_confirmation_seconds', 'target_fps')
+                     'fight_confirmation_seconds', 'target_fps', 'unattended_objects',
+                     'unattended_seconds', 'person_down_seconds', 'snatching_vehicles')
 
 
 class CameraManager:

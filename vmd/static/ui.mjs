@@ -33,6 +33,8 @@ const paths = {
   shield: "m12 2 9 4v7c0 6-9 9-9 9S3 19 3 13V6Z",
   arrow: "m9 5 7 7-7 7",
   logout: "M9 3H3v18h6m-1-9h14m-5-5 5 5-5 5",
+  eye: "M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Zm13 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
+  eyeOff: "m3 3 18 18M10 5.2a12 12 0 0 1 2-.2c7 0 10 7 10 7a18 18 0 0 1-3.4 4.2M6.2 6.2A18 18 0 0 0 2 12s3 7 10 7a12 12 0 0 0 5.8-1.5M9.9 9.9a3 3 0 0 0 4.2 4.2",
 };
 export function icon(name, className = "") {
   const node = svg("svg", {
@@ -74,6 +76,7 @@ export function weaponAction(camera) {
 }
 export function objectSummary(camera) {
   const meta = camera?.object_meta || {};
+  if (meta.knife_status === 'off') return 'Weapon detection off';
   if (meta.status === "off" || !camera?.object_detection && !meta.status) return "Weapon detection off";
   if (meta.status === "error" || meta.knife_status === "error" || meta.knife_error) return "Weapon detector unavailable";
   if (camera?.status && camera.status !== "running") return "Weapon detection inactive";

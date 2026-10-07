@@ -1,6 +1,6 @@
 # VDM Shield — current architecture and data flow
 
-**Updated: 27 September 2026.** This document describes the current local working tree, including changes that have not yet been committed, and the explicitly labelled next-stage design. It covers required resources, components, models, data types, processing, storage and response flow. [HANDOFF.md](HANDOFF.md) records implementation checkpoints; this file explains how the components fit together. This documentation update changes no application code or runtime settings.
+**Updated: 7 October 2026.** This document describes the local working tree, including changes not yet committed, and explicitly labelled next-stage designs. It covers resources, models, processing, storage and response flow. Older dated sections provide implementation context; current code and the settings below govern behavior.
 
 **Reading guide:** requirements and setup are in section 2; the full data path in section 3; tools/models and camera settings in sections 4–7; data/storage/response behavior in sections 8–14; training and connectivity in sections 15–16; the planned local System 1 layer in section 17; and the separate Vision Lab in section 18.
 
@@ -27,6 +27,9 @@ The machine-learning components currently perform **pose estimation, object dete
 | Multiple cameras, tracking, fight/posture rules | Implemented; maximum four camera/analysis sessions, with finished unsaved recordings recyclable. |
 | ZipDepth and depth-confirmed fights | Implemented; available alongside the earlier responsive mode and MiDaS/DPT alternatives. |
 | Guarded punches, strike timer and standing snatching | Implemented; exact contact-depth checks, configurable fight escalation and one-incident stage upgrades. |
+| Partial-view snatching and person-down checks | Implemented; articulated same-actor reach/pull, bounded 2 FPS departure history, partial-hip posture and configurable person-down duration. No field accuracy claim. |
+| Rider snatching review | Opt-in; original motorcycle association, near-neck pull and supported rider/target movement. Review-only; no theft proof or automatic escalation. |
+| Unattended-item checks | Opt-in; existing YOLO26s samples people and bags, then source-time attendance/absence rules create reviewable local incidents. No ownership or explosive-content inference. |
 | Knife/gun observations and saved incidents | Implemented using the pinned Assalim YOLOv8n checkpoint. Reported gun false positives remain unresolved. |
 | Eco scheduling and camera recovery | Implemented, with saved settings and explicit manual-stop behavior. |
 | Centre account and authority/hospital contacts | Implemented for one centre per installation. |
@@ -51,7 +54,7 @@ The main dashboard binds to loopback port **8765**. The optional evidence gatewa
 | FastAPI, Uvicorn, Pydantic, NumPy and OpenCV | HTTP API, validation, decoding and image operations | Base dependencies install through the project package; Pydantic is used through FastAPI. The app uses FastAPI, not Flask. |
 | Ultralytics, PyTorch, torchvision, `lap` | Pose, tracking and weapon models | Installed through the `vision` extra; versions and bounds are in `pyproject.toml`. |
 | ONNX Runtime; local ZipDepth model and manifest | Preferred depth path | ONNX inference is local on CPU. `timm==0.6.13` and `einops` support the optional legacy depth paths. The `depth-export` extra is for initial ONNX preparation, not a cloud runtime. |
-| Local model assets under `models/` | Neural inference | YOLO11n pose, ZipDepth, and, when weapons are enabled, the specialist and person-mask detector. Optional MiDaS/DPT assets are needed only when selected. |
+| Local model assets under `models/` | Neural inference | YOLO11n pose, ZipDepth, YOLO26s for sampled person/bag/vehicle context, and the specialist when weapons are enabled. Unattended and rider checks can run without specialist weights. Optional MiDaS/DPT assets are needed only when selected. |
 | Webcam permission, reachable IP stream or supported recording | Input | IP cameras require the video endpoint, not their administration page. LAN client isolation can prevent access despite a shared Wi-Fi name. |
 | Modern browser with JavaScript | Dashboard and media player | Native HTML/CSS/ES modules; no Node/frontend build step is needed to run the UI. Web Audio needs an operator gesture; geolocation needs browser/OS permission. |
 | SQLite and writable `data/` | Persistence | SQLite is embedded through Python. Allow disk space for uploaded originals, incident AVI files and additional MP4 playback caches. No cloud database is required. |
@@ -83,7 +86,7 @@ Webcam / reachable IP video stream / uploaded recording
       ├─ live Eco scheduler (recordings bypass quiet-scene skipping)
       ├─ YOLO11n pose → ByteTrack → optical flow + pose stabilization
       ├─ sampled ZipDepth / optional MiDaS → original-frame depth matches
-      └─ sampled YOLO weapon detector → fresh gun/knife observations
+      └─ sampled object worker → gun/knife and optional same-frame person/bag/vehicle observations
   → timestamped observations and short interaction histories
       ├─ CURRENT: anatomical/motion/depth/timer gates or weapon episode gate
       │    → typed incident + reasons + score + camera/location snapshot
@@ -98,6 +101,8 @@ Webcam / reachable IP video stream / uploaded recording
            → typed incident hypotheses + scores + attached evidence references
            → advisory inspector/review data; evaluate before any policy role
 
+Optional person/bag context → bounded attendance/absence rules → local unattended-item incident
+Optional rider/vehicle context + pose/motion → review-only reach/pull/reaction sequence → saved evidence
 Browser controls → authenticated FastAPI → camera settings / review / dispatch
 Operator review → saved review label; future curated training, not online learning
 ```
@@ -148,7 +153,9 @@ A requested response can independently enter the SMS worker when messaging is en
 | [DepthWorker](vmd/depth_worker.py), [ZipDepth](vmd/depth.py) | Spawned process, bounded queues, ONNX Runtime CPU | Sampled frame plus identity/timestamps | Normalized inverse-depth map, JPEG visualization, latency and status. |
 | [BehaviorHeuristic](vmd/behavior.py), [FightHeuristic](vmd/heuristics.py), [FightConfirmation](vmd/confirmation.py), [spatial checks](vmd/spatial.py) | Geometry, motion and temporal rules | Stabilized tracks, flow, optional matched depth | Fight/posture assessments, typed events, scores, reasons and blockers. |
 | [SnatchingHeuristic](vmd/snatching.py) | Neck reach, supported pull, same-actor departure and original grab depth | Short per-track movement histories | Possible snatching and confirmed snatching hypotheses from movement; not jewelry recognition. |
-| [ObjectWorker / WeaponModel](vmd/objects.py) | Separate CPU process; two YOLO detection passes | Sampled frame | Knife/gun boxes and a preview whose detected heads are blurred. |
+| [VehicleSnatchingHeuristic](vmd/vehicle_snatching.py) | Opt-in original motorcycle association, near-neck reach/pull and supported target reaction | Bounded source-time rider/vehicle/pair histories | Review-only possible snatching; does not confirm theft or trigger automatic calls. |
+| [ObjectWorker / WeaponModel](vmd/objects.py) | Separate CPU process; general YOLO26s and optional specialist pass | Sampled frame | Weapon boxes, optional same-frame person/bag/vehicle context and best-effort head-blurred preview. Bag/rider-only mode does not load the specialist. |
+| [UnattendedObjects](vmd/unattended.py) | Bounded geometry/attendance/absence rules | Fresh frame-matched bag and person boxes with source timestamps | Countdown state and one reviewable event per stationary bag episode; ownership/contents unverified. |
 | [Store / EvidenceBuffer](vmd/storage.py) | JPEG deque, bounded queue, SQLite, OpenCV MJPEG encoder | Events, sampled frames, crowd telemetry | Persistent incident metadata and local AVI evidence. |
 | [MediaLibrary](vmd/media.py), [player](vmd/static/player.mjs) | OpenCV validation, FFmpeg H.264 conversion, HTML video | Uploaded files or saved evidence | Local video catalogue, cached MP4 playback, seek/speed controls. |
 | [AlertAgent](vmd/alerts.py) | SQLite-backed state machine and timer thread | Live incidents and operator actions | Durable countdowns, acknowledgements, cancellation and response requests. |
@@ -175,10 +182,14 @@ The inspector's Camera controls also exposes **Edit detection settings**. It sub
 | `threshold` | 0.40–0.95; default 0.60 | Fight heuristic score cutoff. Lower is more sensitive; it cannot bypass geometry/depth gates or change weapon confidence. |
 | `hold_seconds` | 0.3–5; default 0.7 | Provisional sustained-grappling observation window; explicit supported strikes use their contact checks. |
 | `fight_confirmation_seconds` | 0.5–10; default 3 | Required supported fight span. Reciprocal/continuing evidence and fresh depth remain mandatory. Some legacy option copy still mentions three seconds; the saved numeric field is authoritative. |
+| `person_down_seconds` | 1–60; default 3 | Required supported low-movement lying-posture duration; no injury diagnosis. |
 | `target_fps` | Integer 2–30; default 8 | Desired pose-analysis rate, not guaranteed throughput. For files, controls selected source frames. |
 | `eco_mode` | Boolean; default false | Reduces quiet live-scene inference. Recording analysis does not skip selected frames for Eco. |
 | `object_detection` | Boolean; UI true, API false | Enables the independent gun/knife worker. |
-| `object_fps` | 0.2–2; default 1 | Weapon-worker sample rate; independent of pose FPS. |
+| `unattended_objects` | Boolean; default false | Opts into person/bag context and attendance checks independently of specialist weapons. |
+| `unattended_seconds` | 10–3600; default 60 | Continuous source-time no-nearby-person interval after prior observed attendance. |
+| `snatching_vehicles` | Strict boolean; default false | Opts into rider/vehicle context and review-only snatching; camera or recording inputs only, independently of weapon/bag checks. |
+| `object_fps` | 0.2–2; default 1 | Shared object-worker cadence for enabled weapon/bag/rider checks; independent of pose FPS. |
 
 OpenCV decodes frames to `numpy.ndarray`, normally `uint8` with shape `[height, width, 3]` in BGR channel order. Live capture preserves aspect ratio, caps width at 960 pixels, and uses even dimensions for evidence encoding. Network capture has five-second open/read timeouts. The live capture thread owns the decoder and replaces its latest packet; inference can skip intermediate frames instead of lagging behind a growing queue. **File capture is different:** it samples the requested FPS, also caps height at 480, and waits for the engine to consume each selected packet before handing off the next. Model warmup does not silently skip selected recording frames.
 
@@ -210,7 +221,7 @@ Recovery operates while the server is alive. It is not an OS service manager tha
 | Preferred lightweight depth | `zipdepth-91f3fd2.onnx` plus verified manifest | ONNX Runtime CPU, one thread per runtime pool | Frame-normalized relative inverse depth in `[0,1]`; no metric distance. |
 | Optional legacy depth | MiDaS Small, DPT Hybrid, DPT Large | Local PyTorch assets in a depth process | Relative-depth maps, not metres. Availability depends on installed assets. |
 | Public weapon detections | Assalim `Normal_Compressed/best.pt`, stored as `assalim-normal-compressed-best.pt` | YOLOv8n on CPU in the object worker | `0: guns`, `1: knife`; public `guns` label becomes `gun`. |
-| Object-preview privacy | `yolo26s.pt`, person class only | CPU in the object worker | Person boxes for approximate head blurring; other COCO labels are not public detections. |
+| Object context / preview privacy | `yolo26s.pt`; people plus opt-in bag and rider/vehicle classes | CPU in the object worker | Same-frame attendance, rider context and approximate head blur. General-object labels do not create weapon alerts. |
 | Replacement weapon candidate | Fresh pretrained YOLOv8s by default in the Colab notebook | Colab GPU during training | Same gun/knife class order; not deployed in VDM yet. |
 
 The specialist and ZipDepth assets have integrity checks. The weapon loader validates class order and uses restricted `torch.load(..., weights_only=True)` with an explicit installed-class allowlist. The current specialist is enabled for both classes at a 0.90 inference cutoff. `weapon_detections()` and the live UI require confidence **strictly above 0.90**; exactly 90% is rejected. Raw confidence is preserved until display formatting. The same filter controls preview boxes, live actions and new weapon incidents. Changing the camera's **fight threshold** does not change these weapon cutoffs.
@@ -221,7 +232,7 @@ The specialist and ZipDepth assets have integrity checks. The weapon loader vali
 
 `Motion.infer()` computes Farneback optical flow on a 320×180 grayscale frame. It estimates background camera movement, subtracts it, and measures residual movement in person/joint regions. `PoseStabilizer` anchors to visible torso joints, applies smoothing/deadbands, rejects large discontinuities, and requires image-motion support before interpreting pose displacement as limb speed. Unreliable poses and gaps over the supported timing window reset motion history.
 
-`FightHeuristic` considers proximity, limb motion, contact/strike evidence, repeated activity and camera motion. Its score is a rule score, not a calibrated probability of violence. `BehaviorHeuristic` also handles `possible_fall`, `person_down`, `person_down_after_fight` and `hands_up` with track-local temporal evidence. These observations require review; posture does not establish intent.
+`FightHeuristic` considers proximity, limb motion, contact/strike evidence, repeated activity and camera motion. Its score is a rule score, not a calibrated probability of violence. `BehaviorHeuristic` also handles `possible_fall`, `person_down`, `person_down_after_fight` and `hands_up` with track-local evidence. Person-down needs reliable shoulders and at least one visible hip; compact/diagonal lying poses additionally need an observed straight leg aligned with the torso. Low movement must persist for `person_down_seconds` (default 3, range 1–60). Seated/bent/moving/unreliable poses are rejected; frame gaps, missing tracks, identity/scale jumps and camera motion reset continuity. Posture does not establish injury or intent.
 
 ### Review warnings, confirmed fights and standing snatching
 
@@ -235,7 +246,19 @@ Slower reciprocal punches have a separate evidence path in `FightHeuristic`: fil
 
 Each live assessment publishes `fight_timer_seconds`, `fight_timer_required_seconds`, `fight_timer_started`, `fight_timer_state` and `fight_timer_reason`. States distinguish counting, paused, waiting for depth, waiting for continuing strikes, confirmed and idle. Before an accepted onset, `fight_timer_started=false` keeps the label at Checking interaction. Inspector, camera cards and full feed render this live state independently of saved incidents; they do not extrapolate browser time and hide progress for stopped/stale cameras. Confirmation is explicit backend state, never inferred from a full progress bar.
 
-`SnatchingHeuristic` reuses stabilized person poses and measured wrist/ankle image motion (or a stricter observed upper-body departure path when ankles are cropped). For standing people it follows one actor's wrist approaching another person's neck/upper chest, then a sharp supported withdrawal within one second. That can create `possible_snatching`; known uncertain/separated depth at the original contact vetoes the warning, and a late compatible original-frame result may restore it. An upgrade to `snatching_detected` requires the same actor moving rapidly away, with several trajectory samples and supported leg motion (or the stricter cropped-leg torso departure evidence), within five seconds. A victim or unrelated person running cannot upgrade it. Matching depth must support the original contact within ±0.15 seconds, rather than a later pull or departure. The observed reach requests a bounded priority depth sample between ordinary samples; priority requests are limited to two per second and still use the single-item queue. A later result is joined to the exact original frame/poses. This is a movement hypothesis; the system does not detect jewelry or establish property removal. Motorcycle snatching remains deferred.
+`SnatchingHeuristic` reuses stabilized poses and measured wrist/ankle motion, with a stricter torso-departure route when ankles are cropped. Both shoulders and one visible hip can support a partial side view. It follows one actor's articulated, torso-relative wrist reach to another person's neck/upper chest and a sharp supported pull within one second; rigid whole-body translation is insufficient. `possible_snatching` can upgrade only after the same actor rapidly departs with supported leg or cropped-leg torso evidence within five seconds. At 2 FPS, departure history expands to at most two seconds to retain the required observations rather than lowering the count. Departure credits signed distance gained by the actor at each step while holding the previous target position fixed. This preserves sideways escape while rejecting victim-only separation, following a faster target and inward reversals. Victim/unrelated-person running, disappearance and track/scale jumps cannot finish the actor's sequence. Known uncertain/separated original-grab depth vetoes the warning; a late compatible result can restore it. Confirmation needs matching depth within ±0.15 seconds of the original contact. The reach requests bounded priority depth, joined to exact original sequence/time/shape. This estimates movement, not jewelry recognition or proof of property removal. The separate optional rider review below does not change these standing-person gates.
+
+### Opt-in rider snatching review
+
+`snatching_vehicles=false` preserves existing saved/new-camera behavior. Add camera and Edit detection settings offer **Rider snatching review**; the API uses strict booleans and validates camera/recording mode after merging a PATCH. The shared object worker uses the existing YOLO26s asset for vehicle context even with specialist weapons off. Recording analysis joins scheduled source-frame object results; live work remains bounded. Reanalyse a file after enabling it; saved events are not retrospectively reclassified.
+
+`VehicleSnatchingHeuristic` is separate from standing snatching. It retains the observed rider and original motorcycle association, requires an articulated near-neck reach and supported pull within one second, then checks rider movement plus the target's reaction within three source seconds. Confident raw wrist geometry has a bounded horizontal 0.18 target-scale hand allowance, without vertical expansion; stabilized wrist displacement and measured flow still support reach/pull. Rider and original motorcycle must each move at least 0.20 actor scale, with the original motorcycle observed again after the pull. Rider motion needs four observations spanning at least 0.4 seconds, normalized speed at least 0.20 and image motion at least 0.12 in three observations.
+
+Target reaction requires at least 0.25 target-scale displacement, normalized speed at least 0.4, four observations spanning at least 0.4 seconds and flow at least 0.12 in three. It also needs either at least 0.20 scale toward the rider's original position or a supported falling posture; posture alone cannot bypass reaction motion. Matched YOLO26s person/motorcycle context must reach 0.4 confidence. At most eight vehicle tracks and twelve pending pairs are retained, context expires after 2.5 seconds and a hidden target position is retained for at most one second. Bicycle support is not included. These internal values are heuristic gates, not camera controls or accuracy estimates.
+
+Missing/ambiguous object context, discontinuities, track/scale jumps, camera motion and unsupported wrist/torso observations break evidence. A newly detected motorcycle-like box over a falling person cannot replace the previously associated vehicle. Prior supported reaction may survive posture change; reacquiring an ID does not reconstruct missing movement. Vehicle presence, ordinary travel or a nearby hand alone cannot alert. A phone exchange with coincident movement can still resemble the sequence, so manual review remains necessary.
+
+It emits a **review-only** possible-snatching incident with evidence/diagnostic metadata. Operator review/manual dispatch and optional Gemini reporting apply; it cannot emit `snatching_detected`, prove theft or start an automatic response countdown. The original standing-person depth-confirmed path and `AUTO_EVENTS` remain unchanged. The inspector publishes current rider-check status separately from saved alerts.
 
 The engine preserves original raw poses for each submitted depth frame, including source time and shape. A bounded 32-frame cache is joined by sequence, exact source time and shape. Flat/uncertain maps cannot support escalation. Snatching keeps only a short depth history and clears it on discontinuities; old observations cannot attach to a reacquired identity.
 
@@ -251,7 +274,15 @@ Weapon detections do not require two people, a person count, or fight confirmati
 
 A single confident false detection can therefore still become a weapon incident. The notebook is intended to address that model/data weakness; no accuracy improvement is claimed until a new model is evaluated. Stale, failed or stopped object results are removed from the public observation/action state.
 
-The object worker budgets one OpenCV and one PyTorch CPU thread. Both person and weapon models register an `on_predict_start` callback to restore the PyTorch limit after Ultralytics' lazy device setup, before warmup/inference. This avoids that setup silently expanding the background worker to the machine-wide thread count; it does not alter model weights, input size, classes or confidence. The main pose model and its MPS serialization guard are independent of this worker process.
+The object worker budgets one OpenCV and one PyTorch CPU thread. General-object and weapon models restore that limit after Ultralytics' lazy device setup, before inference. This thread guard does not change model weights/input size. Unattended mode deliberately expands the general pass to COCO classes 0/24/26/28 at confidence 0.2; bags must independently meet 0.5, and attendance needs a person at least 0.4. Weak nearby people at least 0.2 still interrupt absence. The specialist's public cutoff remains strictly above 0.90. Pose/MPS serialization is independent.
+
+### Unattended-item episodes
+
+`unattended_objects=false` is the default. When enabled, `UnattendedObjects` receives people and backpack/handbag/suitcase boxes from one fresh YOLO26s sample, never newer pose boxes. Exact source sequence/time/shape and cached camera motion must match. The detector retains at most **24 bag tracks**. A stable bag must be alongside exactly one nearby attendant for at least **two source seconds and three observations** before continuous absence starts `unattended_seconds` (default 60, range 10–3600).
+
+Missing/stale/error samples, bag movement, carried boxes, ambiguous matches, camera movement, resolution changes, reversed time and excessive sample gaps invalidate pending evidence. The gap bound is `max(3, 2/object_fps)` seconds. Never-attended bags do not arm; returning nearby people interrupt absence. One stationary episode emits one `unattended_object` with duration, bag box and prior-attendance metadata. A nearby person does not prove ownership/placement, and appearance cannot establish explosive contents. This is an unattended-item review hypothesis, not bomb detection.
+
+The inspector displays countdowns from accepted source samples. Saved events enter existing evidence/review and optional Gemini reporting; they can be dispatched manually. Recent unreviewed physical-camera unattended-item, person-down and possible-fall events have one local review chime after alarm sound is enabled. They do not add automatic phone escalation or change `AUTO_EVENTS`.
 
 ## 7. Eco mode and process boundaries
 
@@ -266,7 +297,7 @@ Eco mode is a scheduler, not a separate neural network. It resizes frames to at 
 
 Actual rates depend on processing capacity. Eco counters measure skipped work/submissions; they are not measured battery savings. The skip happens before the evidence-buffer append, so skipped frames are not retained as full-rate footage. This matters for future clip-description work and prevents describing the existing buffer as a continuous DVR.
 
-The main process hosts FastAPI, per-camera engine/capture threads, the camera recovery supervisor, evidence writer, alert timer, call worker and optional SMS worker. Each enabled camera can also own a spawned depth process and a spawned object process. Their request/response queues each hold at most one pending item and replace stale work for live processing. Recording analysis waits for scheduled/priority depth results with bounded timeouts; its object worker remains asynchronous. Model failure in a child is reported independently of the pose path.
+The main process hosts FastAPI, per-camera engine/capture threads, recovery, evidence, alert, call and optional SMS workers. Each camera can own spawned depth/object processes. Live request/response queues hold at most one pending item and replace stale work. Recording analysis waits for scheduled/priority depth results and, with unattended checks enabled, selected source-time object results through bounded backpressure/timeouts. This preserves sampled absence intervals despite model warmup or fast decoding. Optional object failure is reported without stopping pose/fight checks. These bounds do not establish four-feed performance on 4 GB or measured CCTV accuracy.
 
 MPS pose prediction, CPU result transfer and GPU synchronization share a process-wide lock. This was added after concurrent Metal inference caused native process crashes. CPU tracking has its own small lock around ByteTrack's global ID counter. Worker processes watch the parent's process sentinel and exit after parent death, avoiding orphaned inference workers. `faulthandler` emits native-crash thread diagnostics. These changes improve observed stability; they do not guarantee indefinite uptime.
 
@@ -352,7 +383,7 @@ The web player supports seeking, ±10 seconds, start/end, playback speeds from 0
 
 ### Recorded-video analysis continuity
 
-Uploads are stored by `MediaLibrary`; the browser then starts a file session and navigates to its analysis feed. At capacity, only finished or manually stopped unsaved file sessions can be replaced; configured physical cameras and active analyses are retained. Recordings sample to the requested analysis FPS (8 by default) and at most 480 pixels high, preserving original video timestamps. A one-packet capture handoff prevents model warmup or slow inference from skipping selected frames. File analysis waits for exact source-frame depth through `DepthWorker.analyze_file_frame`; regular cadence uses source time and grab priorities cannot be lost to live wall-clock throttling. Progress and completion are visible in the feed. Every resulting event carries `live_camera=false`, preventing automatic response calls. Originals remain available for playback and seeking.
+Uploads are stored by `MediaLibrary`; the browser starts a file session and opens its analysis feed. At capacity, only finished/manually stopped unsaved files can be replaced. Recordings sample requested analysis FPS (8 by default), cap height at 480 and preserve source timestamps. One-packet capture handoff prevents model warmup/slow inference from skipping selected frames. File analysis waits for exact source-frame depth and, when unattended or rider review is enabled, scheduled object results; cadence uses source time. Progress/completion are visible. Every event retains `live_camera=false`, preventing automatic calls or live review chimes. Originals remain available for playback/seeking.
 
 ## 10. Where the response agent is implemented
 

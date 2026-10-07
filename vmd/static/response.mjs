@@ -33,6 +33,17 @@ export function alarmLevel(alert, now) {
   return .025 + .125 * Math.min(1, Math.max(0, (now - alert.created) / 10));
 }
 
+export function reviewAlarmEvents(incidents, cameras, now) {
+  const available = new Set((cameras || []).filter(camera =>
+    camera.status === 'running' && !camera.stale && !camera.presentation).map(camera => camera.camera_id));
+  return (incidents || []).filter(event =>
+    ['unattended_object', 'person_down', 'possible_fall'].includes(event.event_type)
+    && event.mode === 'live' && event.signals?.live_camera === true
+    && event.review === 'unreviewed' && event.handled_at == null
+    && available.has(event.camera_id) && Number.isFinite(event.created)
+    && event.created <= now && event.created >= now-30);
+}
+
 export function responseText(alert, now) {
   if (!alert) return 'Slide to call authorities. You can request a hospital next.';
   if (alert.state === 'pending') return `Automatic dispatch in ${Math.max(0, Math.ceil(alert.deadline-now))}s · acknowledge to stop`;
@@ -94,6 +105,7 @@ export class ResponseUI {
     this.offset = 0;
     this.audio = null;
     this.lastBeep = 0;
+    this.reviewAlarmed = new Map();
     this.selectedKey = null;
     this.busy = false;
     $('enable-alarm').addEventListener('click', async () => {
@@ -204,6 +216,18 @@ export class ResponseUI {
     }
     const level = fresh ? Math.max(0, ...active.map(alert => alarmLevel(alert, this.now()))) : 0;
     if (level && Date.now()-this.lastBeep >= 900) { this.beep(level); this.lastBeep = Date.now(); }
+    // One local review chime per newly saved posture/item episode. This never
+    // creates a response countdown or requests a phone call.
+    if (fresh && this.audio?.state === 'running') {
+      this.reviewAlarmed ||= new Map();
+      for (const [id, created] of this.reviewAlarmed) if (created < this.now()-60) this.reviewAlarmed.delete(id);
+      const reviews = reviewAlarmEvents(this.workspace.incidents, this.workspace.cameras, this.now())
+        .filter(event => !this.reviewAlarmed.has(event.id));
+      if (reviews.length) {
+        reviews.forEach(event => this.reviewAlarmed.set(event.id, event.created));
+        if (!level) this.beep(.06);
+      }
+    }
     if (this.workspace.page === 'operations') this.renderDispatch(this.workspace.selectedEvent());
     this.renderEvidenceDispatch();
   }

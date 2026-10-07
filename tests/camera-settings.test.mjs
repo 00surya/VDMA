@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CameraSettingsEditor, readCameraSettings, validateCameraSettings, depthStatusText, fightStatusText } from '../vmd/static/camera-settings.mjs';
+import { CameraSettingsEditor, readCameraSettings, validateCameraSettings, depthStatusText, fightStatusText, unattendedStatusText } from '../vmd/static/camera-settings.mjs';
 
 const settings = {device: 'auto', depth: 'ZipDepth', depth_fps: 1, detection_mode: 'depth_confirmed',
-  eco_mode: false, object_detection: true, object_fps: 1, threshold: .72, hold_seconds: .9, fight_confirmation_seconds: 1.2, target_fps: 8};
+  eco_mode: false, object_detection: true, object_fps: 1, threshold: .72, hold_seconds: .9, fight_confirmation_seconds: 1.2, target_fps: 8,
+  unattended_objects: false, unattended_seconds: 60, person_down_seconds: 3, snatching_vehicles: false};
 function formWith(values) {
   return {elements: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, {
     value: String(value), error: '', setCustomValidity(message) {this.error = message;},
@@ -23,7 +24,39 @@ test('shared camera settings reject disabled or too-slow depth for confirmation,
   assert.equal(parsed.threshold, .72);
   assert.equal(parsed.object_fps, 1);
   assert.equal(parsed.fight_confirmation_seconds, 1.2);
+  assert.equal(parsed.unattended_objects, false);
+  assert.equal(parsed.unattended_seconds, 60);
+  assert.equal(parsed.person_down_seconds, 3);
+  assert.equal(parsed.snatching_vehicles, false);
   assert.equal(parsed.source, undefined, 'editing must not send source or unrelated form values');
+});
+
+test('rider snatching review is an explicit boolean and sends only editable settings', () => {
+  const form = formWith({...settings, snatching_vehicles: true, mode: 'live', source: 'private-source'});
+  const enabled = readCameraSettings(form);
+  assert.equal(enabled.snatching_vehicles, true);
+  assert.equal(enabled.mode, undefined);
+  assert.equal(enabled.source, undefined);
+  form.elements.snatching_vehicles.value = 'false';
+  assert.equal(readCameraSettings(form).snatching_vehicles, false);
+});
+
+test('unattended countdown uses accepted source samples and clears stale or paused displays', () => {
+  const camera = {status: 'running', settings: {...settings, unattended_objects: true, unattended_seconds: 90},
+    object_meta: {status: 'ready'}, unattended_meta: {tracks: [
+      {label: 'suitcase', status: 'counting', absent_seconds: 12.5, threshold_seconds: 90}]}};
+  assert.match(unattendedStatusText(camera), /suitcase · 12.5 \/ 90s alone/);
+  assert.match(unattendedStatusText({...camera, stale: true}), /paused/);
+  assert.match(unattendedStatusText({...camera, object_meta: {status: 'ready', stale: true}}), /fresh/);
+  assert.match(unattendedStatusText({...camera, object_meta: {status: 'error'}}), /unavailable/);
+  assert.match(unattendedStatusText({...camera, unattended_meta: {tracks: []}}), /no monitored bag visible/);
+  assert.match(unattendedStatusText({...camera, unattended_meta: {tracks: [
+    {...camera.unattended_meta.tracks[0], status: 'alerted'}]}}), /review required/);
+  assert.equal(unattendedStatusText({status: 'running', settings}), 'Unattended items off');
+  const form = formWith({...settings, unattended_objects: true, unattended_seconds: 90, person_down_seconds: 7});
+  assert.equal(readCameraSettings(form).unattended_objects, true);
+  assert.equal(readCameraSettings(form).unattended_seconds, 90);
+  assert.equal(readCameraSettings(form).person_down_seconds, 7);
 });
 
 test('depth readiness distinguishes stopped, missing, stale and separated pair samples', () => {

@@ -10,10 +10,10 @@
     />
     <link rel="icon" href="/shield.svg" />
     <link rel="stylesheet" href="/leaflet.css" />
-    <link rel="stylesheet" href="/styles.css?v=fight-responsive-3" />
+    <link rel="stylesheet" href="/styles.css?v=overlay-display-1" />
     <link rel="stylesheet" href="/map.css" />
     <link rel="stylesheet" href="/player.css" />
-    <script type="module" src="/app.js?v=fight-observation-1"></script>
+    <script type="module" src="/app.js?v=overlay-display-1"></script>
   </head>
   <body>
     <aside class="sidebar">
@@ -104,6 +104,7 @@
                 ><button id="network-mode">Demo network</button>
               </div>
               <div class="toolbar-actions">
+                <button id="overlay-toggle" class="button secondary" type="button" aria-pressed="true" title="Display only. Detection continues in the background."><span data-icon="eye"></span>Hide pose &amp; boxes</button>
                 <button id="manage-cameras" class="text-button">
                   Manage cameras
                 </button>
@@ -167,6 +168,8 @@
                 <summary>Camera controls</summary>
                 <p id="camera-depth-status" class="field-help"></p>
                 <p id="camera-fight-status" class="field-help"></p>
+                <p id="camera-unattended-status" class="field-help" role="status"></p>
+                <p id="camera-snatching-status" class="camera-analysis-status"></p>
                 <div class="source-controls">
                 <button id="edit-camera-settings" class="button secondary">
                   Edit detection settings</button>
@@ -511,6 +514,7 @@
           <h2 id="viewer-title">Camera</h2>
         </div>
         <div class="viewer-actions">
+          <button id="viewer-overlay-toggle" class="button secondary" type="button" aria-pressed="true" title="Display only. Detection continues in the background."><span data-icon="eye"></span>Hide pose &amp; boxes</button>
           <label class="sr-only" for="viewer-camera">Choose camera</label>
           <select id="viewer-camera"></select>
           <button
@@ -525,7 +529,7 @@
       <div id="selected-feeds" hidden>
         <article class="feed-card">
           <div class="feed-top">
-            <h2>Video &amp; pose</h2>
+            <h2 id="pose-view-title">Video &amp; pose</h2>
             <span id="feed-status" class="mono">WAITING</span>
           </div>
           <div class="video-stage">
@@ -574,11 +578,11 @@
         <p id="viewer-reason">Waiting for camera status</p>
       </div>
       <details class="object-panel" open>
-        <summary>Knife &amp; gun detections <span id="object-label" class="mono">OFF</span></summary>
-        <p id="object-message" class="field-help">Enable knife and gun detection when connecting a camera.</p>
+        <summary>Weapons &amp; unattended item checks <span id="object-label" class="mono">OFF</span></summary>
+        <p id="object-message" class="field-help">Enable weapon or unattended-item checks in camera settings.</p>
         <div class="object-stage">
-          <img id="object-image" alt="Independently sampled camera frame with knife and gun labels and best-effort head blur" hidden />
-          <p id="object-empty">No weapon detection frame available</p>
+          <img id="object-image" alt="Independently sampled frame with weapon or monitored bag labels and best-effort head blur" hidden />
+          <p id="object-empty">No object sample available</p>
         </div>
         <p id="object-list" class="field-help"></p>
         <p class="field-help">Knives and guns are checked even with one person or no people visible. Fresh detections update the Action field. Labels are model predictions; a missed label does not mean an object is absent.</p>
@@ -716,8 +720,12 @@
               required
           /></label>
           <label>Fight escalation time (seconds)<input name="fight_confirmation_seconds" type="number" min=".5" max="10" step=".1" value="3" required /></label>
+          <label>Person lying still: alarm after (seconds)<input name="person_down_seconds" type="number" min="1" max="60" step=".5" value="3" required /></label>
+          <label>Unattended bags &amp; suitcases<select name="unattended_objects"><option value="false">Off</option><option value="true">On · monitor items left alone</option></select></label>
+          <label>Unattended item: alarm after (seconds)<input name="unattended_seconds" type="number" min="10" max="3600" step="1" value="60" required /></label>
+          <label>Rider snatching review<select name="snatching_vehicles"><option value="false">Off</option><option value="true">On · review rider interactions</option></select></label>
           <label>Analysis frames / second<input name="target_fps" type="number" min="2" max="30" step="1" value="8" required /></label>
-          <label>Weapon updates / second<input name="object_fps" type="number" min=".2" max="2" step=".1" value="1" required /></label>
+          <label>Object / weapon updates per second<input name="object_fps" type="number" min=".2" max="2" step=".1" value="1" required /></label>
         </div>
         <p class="field-help" id="camera-settings-help">
           Higher score thresholds are less sensitive; this is a motion score, not a probability.
@@ -726,6 +734,12 @@
           The live timer pauses or resets when supporting evidence breaks. Lowering the score threshold does not bypass pose, motion or depth checks.
           Review-only mode cannot confirm fights.
           Eco mode reduces processing in quiet scenes. Depth and weapons run independently.
+          Unattended checks monitor backpacks, handbags and suitcases after a nearby person has been observed.
+          The timer resets if someone returns, the item moves or visibility is lost; camera movement also resets it.
+          Item alarms save evidence for review. Person-down checks require a supported lying posture and little body movement.
+          Rider snatching review: Checks near-neck reach, pull, rider departure and the other person’s reaction. Review alert; does not prove theft.
+          Rider context uses the existing YOLO26s object model; weapon weights are not required. Object update rate controls its sampling.
+          Enable alarm sound for a local chime on new live item or person-down alerts.
         </p>
         <p id="form-error" class="error-text" role="alert"></p>
         <button id="source-submit" class="button primary" type="submit">

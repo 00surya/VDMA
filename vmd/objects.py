@@ -1,4 +1,4 @@
-"""Knife/gun observations with a separate person pass for preview privacy."""
+"""Sampled weapons and optional bag/rider context, on their own captured frame."""
 import hashlib
 import os
 import queue
@@ -36,7 +36,7 @@ class ObjectModel:
     weights, checksum, labels = WEIGHTS, SHA256, COCO_CLASSES
     confidence, class_ids, detector = .4, [0], 'YOLO26s'
 
-    def __init__(self, model_dir, device='cpu'):
+    def __init__(self, model_dir, device='cpu', *, class_ids=None):
         path = Path(model_dir).resolve() / self.weights
         if not path.is_file():
             raise RuntimeError(f'{self.detector} weights missing. Run scripts/download_object_model.py.')
@@ -50,6 +50,8 @@ class ObjectModel:
         os.environ.setdefault('MPLCONFIGDIR', str(runtime / 'matplotlib'))
         self.model = self.load_model(path)
         self.device = device
+        if class_ids is not None:
+            self.class_ids = list(class_ids)
         names = self.model.names
         labels = tuple(names[i] for i in range(len(names)))
         if labels != self.labels:
@@ -139,7 +141,7 @@ class WeaponIncidents:
         return detections, events
 
 
-def annotate_objects(frame, detections, people=()):
+def annotate_objects(frame, detections, people=(), monitored_objects=(), *, overlays=True):
     """Draw detections on their own sampled frame with best-effort head blur."""
     import cv2
     image = frame.copy()
@@ -152,6 +154,17 @@ def annotate_objects(frame, detections, people=()):
             if right > left and bottom > top:
                 region = image[top:bottom, left:right]
                 region[:] = cv2.GaussianBlur(region, (0, 0), sigmaX=max(15, (right-left)/3))
+    if not overlays:
+        return image
+    for item in monitored_objects:
+        if item.get('label') not in {'backpack', 'handbag', 'suitcase', 'motorcycle'} or item.get('confidence', 0) < .5:
+            continue
+        x1, y1, x2, y2 = map(int, item['box'])
+        color = (180, 205, 70)
+        cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+        suffix = 'rider context' if item['label'] == 'motorcycle' else 'monitoring'
+        cv2.putText(image, f"{item['label']} / {suffix}", (max(0, x1), max(16, y1-5)),
+                    cv2.FONT_HERSHEY_SIMPLEX, .4, color, 1)
     for item in weapon_detections(detections):
         x1, y1, x2, y2 = map(int, item['box'])
         color = (20, 170, 245)
@@ -161,18 +174,29 @@ def annotate_objects(frame, detections, people=()):
     return image
 
 
-def run_objects(requests, responses, stop, unused_model_type, device, model_dir):
+def run_objects(requests, responses, stop, model_type, device, model_dir):
     try:
         import cv2
         import torch
         cv2.setNumThreads(1)
         torch.set_num_threads(1)
-        model = ObjectModel(model_dir, device)
+        unattended = model_type in {'objects_and_bags', 'bags', 'objects_and_bags_riders', 'bags_riders'}
+        riders = model_type in {'objects_riders', 'riders', 'objects_and_bags_riders', 'bags_riders'}
+        weapons_enabled = model_type not in {'bags', 'bags_riders', 'riders'}
+        context_enabled = unattended or riders
+        class_ids = [0, *([3] if riders else []), *([24, 26, 28] if unattended else [])]
+        model = (ObjectModel(model_dir, device, class_ids=class_ids)
+                 if context_enabled else ObjectModel(model_dir, device))
+        if context_enabled:
+            # Weak person detections still interrupt the absence claim. Bags
+            # must independently clear the attendance rule's stricter cutoff.
+            model.confidence = .2
         weapon, weapon_error = None, None
-        try:
-            weapon = WeaponModel(model_dir, device)
-        except Exception as exc:
-            weapon_error = str(exc) if isinstance(exc, RuntimeError) else f'Weapon detector failed ({type(exc).__name__})'
+        if weapons_enabled:
+            try:
+                weapon = WeaponModel(model_dir, device)
+            except Exception as exc:
+                weapon_error = str(exc) if isinstance(exc, RuntimeError) else f'Weapon detector failed ({type(exc).__name__})'
         replace_latest(responses, {'status': 'ready'})
         while not stop.is_set():
             try:
@@ -182,7 +206,7 @@ def run_objects(requests, responses, stop, unused_model_type, device, model_dir)
             if stop.is_set():
                 break
             started = time.monotonic()
-            people = model.infer(frame)
+            context = model.infer(frame)
             detections = []
             if weapon is not None:
                 try:
@@ -190,14 +214,18 @@ def run_objects(requests, responses, stop, unused_model_type, device, model_dir)
                 except Exception as exc:
                     weapon_error = f'Weapon detector failed ({type(exc).__name__})'
                     weapon = None
-            ok, jpeg = cv2.imencode('.jpg', annotate_objects(frame, detections, people))
+            ok, jpeg = cv2.imencode('.jpg', annotate_objects(frame, detections, context,
+                                                           context if context_enabled else ()))
             if not ok:
                 raise RuntimeError('Could not encode object preview')
+            clean_ok, clean = cv2.imencode('.jpg', annotate_objects(frame, [], context, overlays=False))
             replace_latest(responses, {'status': 'ready', 'sequence': sequence,
                 'source_time': source_time, 'submitted_at': submitted_at,
-                'jpeg': jpeg.tobytes(), 'detections': detections,
+                'jpeg': jpeg.tobytes(), 'clean_jpeg': clean.tobytes() if clean_ok else None, 'detections': detections,
+                'context_objects': context if context_enabled else [], 'frame_shape': list(frame.shape[:2]),
                 # Keep existing API keys for clients; status covers both weapon classes.
-                'knife_status': 'ready' if weapon is not None else 'error', 'knife_error': weapon_error,
+                'knife_status': ('ready' if weapon is not None else 'error') if weapons_enabled else 'off',
+                'knife_error': weapon_error,
                 'latency_ms': round((time.monotonic()-started)*1000)})
     except Exception as exc:
         error = str(exc) if isinstance(exc, RuntimeError) else f'Object detection failed ({type(exc).__name__})'
@@ -205,8 +233,11 @@ def run_objects(requests, responses, stop, unused_model_type, device, model_dir)
 
 
 class ObjectWorker(DepthWorker):
-    def __init__(self, model_dir, fps=1):
-        super().__init__('objects', 'cpu', model_dir, fps=fps, runner=run_objects)
+    def __init__(self, model_dir, fps=1, *, unattended=False, weapons=True, riders=False):
+        model_type = ('objects_and_bags' if weapons else 'bags') if unattended else 'objects'
+        if riders:
+            model_type = model_type+'_riders' if unattended or weapons else 'riders'
+        super().__init__(model_type, 'cpu', model_dir, fps=fps, runner=run_objects)
         self.process.name = 'vmd-objects'
 
     def poll(self):

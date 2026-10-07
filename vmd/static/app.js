@@ -34,7 +34,9 @@ import { CoverageMap } from "./map.mjs";
 import { buildMapData } from "./map-data.mjs";
 import { sharedLocation, isLiveCameraSource } from "./map-location.mjs";
 import { renderOverview, renderAnalytics, renderHealth } from "./reports.mjs";
-import { CameraSettingsEditor, readCameraSettings, validateCameraSettings, depthStatusText, fightStatusText, liveFightTimer, renderFightTimer } from './camera-settings.mjs';
+import { CameraSettingsEditor, readCameraSettings, validateCameraSettings, depthStatusText, fightStatusText, unattendedStatusText, liveFightTimer, renderFightTimer } from './camera-settings.mjs';
+import { snatchingStatusText } from './snatching-status.mjs';
+import { overlaysEnabled, displayFramesPath, renderOverlayButton } from './overlay-display.mjs';
 
 const PAGES = {
   home: ["Home", "Citywide awareness and coordinated response"],
@@ -61,6 +63,7 @@ class Workspace {
       dispatches: {},
       ...stored,
     };
+    this.showDetectionOverlays = overlaysEnabled(this.preferences);
     for (const key of ["cameraSectors", "reviews", "dispatches"])
       if (
         !this.preferences[key] ||
@@ -95,6 +98,7 @@ class Workspace {
     hydrateIcons();
     this.cameraSettings = new CameraSettingsEditor(this);
     this.bind();
+    this.renderOverlayControls();
     this.response = new ResponseUI(this);
     this.evidenceShare = new EvidenceShare(this);
     this.incidentAI = new IncidentAIUI(this);
@@ -188,6 +192,8 @@ class Workspace {
     );
     $("grid-button").addEventListener("click", () => this.setView("grid"));
     $("feed-button").addEventListener("click", () => this.setView("feed"));
+    for (const id of ['overlay-toggle', 'viewer-overlay-toggle'])
+      $(id).addEventListener('click', () => this.toggleOverlays());
     $("close-camera-viewer").addEventListener("click", () =>
       $("camera-viewer").close(),
     );
@@ -800,6 +806,9 @@ class Workspace {
         ["Object detector", camera?.object_meta?.status || "off"],
         ["Weapon detector", camera?.object_meta?.knife_error || camera?.object_meta?.knife_status || "off"],
         ["Knife / gun", objectSummary(camera)],
+        ["Unattended items", unattendedStatusText(camera)],
+        ["Snatching checks", snatchingStatusText(camera)],
+        ["Person-down dwell", `${camera?.settings?.person_down_seconds ?? 3}s`],
       ].flatMap(([key, value]) => [el("dt", key), el("dd", value)]),
     );
     $("reasons").replaceChildren(
@@ -824,6 +833,8 @@ class Workspace {
     $('edit-camera-settings').disabled = this.busy || !camera?.settings || camera.presentation || camera.mode === 'demo';
     $('camera-depth-status').textContent = depthStatusText(camera);
     $('camera-fight-status').textContent = fightStatusText(camera);
+    $('camera-unattended-status').textContent = unattendedStatusText(camera);
+    $('camera-snatching-status').textContent = snatchingStatusText(camera);
     $("eco-button").disabled = this.busy || !camera || camera.presentation || camera.mode !== "live";
     $("eco-button").textContent = camera?.eco_mode ? "Disable eco mode" : "Enable eco mode";
     $("eco-button").setAttribute("aria-pressed", String(!!camera?.eco_mode));
@@ -981,11 +992,29 @@ class Workspace {
   setImage(image, empty, jpeg) {
     setPreviewImage(image, empty, jpeg);
   }
+  renderOverlayControls() {
+    for (const id of ['overlay-toggle', 'viewer-overlay-toggle'])
+      renderOverlayButton($(id), this.showDetectionOverlays, icon);
+    $('pose-view-title').textContent = this.showDetectionOverlays ? 'Video & pose' : 'Video';
+    $('pose-image').alt = this.showDetectionOverlays
+      ? 'Selected camera with pose and incident overlays' : 'Selected camera without pose lines or bounding boxes';
+  }
+  toggleOverlays() {
+    this.showDetectionOverlays = !this.showDetectionOverlays;
+    this.preferences.showDetectionOverlays = this.showDetectionOverlays;
+    if (!savePreferences(this.preferences))
+      this.toast('This browser could not save the display option. It still works for this session.');
+    this.renderOverlayControls();
+    this.clearFrames();
+    for (const card of this.cardNodes.values())
+      this.setImage(card.querySelector('img'), card.querySelector('.tile-empty'), null);
+  }
   async refreshFrames() {
     if (document.hidden || this.page !== "operations") return;
     const selected = this.selected,
       mode = this.cameraMode,
-      view = this.view;
+      view = this.view,
+      overlays = this.showDetectionOverlays;
     if (mode === "sample") {
       this.clearFrames();
       $("pose-empty").querySelector("p").textContent =
@@ -999,8 +1028,8 @@ class Workspace {
       $("pose-empty").querySelector("p").textContent = "No image available";
       let bundle;
       if (view === "grid") {
-        const previews = await this.api.request("/camera-frames");
-        if (mode !== this.cameraMode || view !== this.view) return;
+        const previews = await this.api.request(displayFramesPath('/camera-frames', overlays));
+        if (mode !== this.cameraMode || view !== this.view || overlays !== this.showDetectionOverlays) return;
         for (const [id, card] of this.cardNodes)
           this.setImage(
             card.querySelector("img"),
@@ -1010,12 +1039,13 @@ class Workspace {
         bundle = previews[selected];
       } else if (selected)
         bundle = await this.api.request(
-          `/cameras/${encodeURIComponent(selected)}/frames`,
+          displayFramesPath(`/cameras/${encodeURIComponent(selected)}/frames`, overlays),
         );
       if (
         selected !== this.selected ||
         mode !== this.cameraMode ||
-        view !== this.view
+        view !== this.view ||
+        overlays !== this.showDetectionOverlays
       )
         return;
       this.setImage($("inspect-image"), $("inspect-placeholder"), bundle?.pose);
@@ -1028,10 +1058,11 @@ class Workspace {
           : objects.sequence != null ? `FRAME ${objects.sequence} · ${objects.age_seconds}s old`
             : (objects.status || "off").toUpperCase();
         $("object-message").textContent = objects.error || objects.knife_error || (objects.status === "ready"
-          ? `Independent weapon sample · up to ${objects.target_fps} updates/second · weapon detector ${objects.knife_status || "off"}`
-          : objects.status === "loading" ? "Loading the weapon model in the background. Pose continues independently."
-            : "Enable knife and gun detection when connecting a camera.");
-        $("object-list").textContent = objectSummary({object_meta: objects, scene_objects: bundle?.scene_objects});
+          ? `Independent object sample · up to ${objects.target_fps} updates/second · weapon detector ${objects.knife_status || "off"}`
+          : objects.status === "loading" ? "Loading object checks in the background. Pose continues independently."
+            : "Enable weapon or unattended-item checks in camera settings.");
+        $("object-list").textContent = [objectSummary({object_meta: objects, scene_objects: bundle?.scene_objects}),
+          unattendedStatusText(this.selectedState())].join(' · ');
         const meta = bundle?.depth_meta || {};
         const camera = this.selectedState();
         if (camera?.status === "error" || camera?.status === "idle") {

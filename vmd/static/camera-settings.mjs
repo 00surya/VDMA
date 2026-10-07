@@ -1,7 +1,7 @@
 import { $, el } from './ui.mjs';
 
-const numericFields = ['threshold', 'hold_seconds', 'fight_confirmation_seconds', 'depth_fps', 'target_fps', 'object_fps'];
-const booleanFields = ['eco_mode', 'object_detection'];
+const numericFields = ['threshold', 'hold_seconds', 'fight_confirmation_seconds', 'depth_fps', 'target_fps', 'object_fps', 'unattended_seconds', 'person_down_seconds'];
+const booleanFields = ['eco_mode', 'object_detection', 'unattended_objects', 'snatching_vehicles'];
 const stringFields = ['device', 'depth', 'detection_mode'];
 export const settingFields = [...stringFields, ...numericFields, ...booleanFields];
 
@@ -55,6 +55,21 @@ export function fightStatusText(camera) {
       : camera.assessment === 'fight_detected' ? 'Fight detected'
         : 'Watching for supported body contact and repeated interaction';
   return `${score} · ${status}`;
+}
+
+export function unattendedStatusText(camera) {
+  if (!camera?.settings?.unattended_objects && !camera?.unattended_objects) return 'Unattended items off';
+  const threshold = camera.settings?.unattended_seconds ?? camera.unattended_seconds ?? 60;
+  if (camera.status !== 'running' || camera.stale || camera.presentation) return `Unattended items paused · alarm after ${threshold}s`;
+  const meta = camera.object_meta || {};
+  if (meta.status === 'error') return 'Unattended items unavailable · check the object model';
+  if (meta.stale || meta.status !== 'ready') return 'Unattended items waiting for a fresh object sample';
+  const tracks = camera.unattended_meta?.tracks || [];
+  const active = tracks.filter(item => ['counting', 'alerted'].includes(item.status));
+  if (active.length) return active.map(item =>
+    `${item.label} · ${item.absent_seconds.toFixed(1)} / ${item.threshold_seconds}s${item.status === 'alerted' ? ' · review required' : ' alone'}`
+  ).join(' · ');
+  return `Unattended items monitoring · alarm after ${threshold}s · ${tracks.length ? 'waiting for a bag to be left alone' : 'no monitored bag visible'}`;
 }
 
 export function liveFightTimer(camera) {

@@ -48,7 +48,8 @@ def call_instructions(centre_name, event, briefing=None):
     when = detected.strftime('%I:%M %p on %d %B %Y %Z').lstrip('0')
     incident = {'fight': 'A fight', 'possible_fight': 'A possible fight',
                 'possible_snatching': 'A possible snatching incident', 'snatching_detected': 'A snatching incident', 'knife_detected': 'A knife',
-                'gun_detected': 'A gun', 'fall': 'A possible fall',
+                'gun_detected': 'A gun', 'fall': 'A possible fall', 'possible_fall': 'A possible fall',
+                'unattended_object': 'A possibly unattended item',
                 'person_down': 'A person down', 'person_down_after_fight': 'A person down after a possible fight',
                 'hands_up': 'A person with hands up'}.get(event['event_type'], event['event_type'].replace('_', ' '))
     place = location['place'] if location else f"camera {event['camera_name']}"

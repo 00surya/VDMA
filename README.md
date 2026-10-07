@@ -6,8 +6,40 @@ This is a working prototype. It supports up to four camera/analysis sessions, bu
 
 **Team:** Tensor Titans — Surya Verma (Team Lead), Swapnil Gaur.
 
+## See it in action
+
+![VDMA dashboard with analysed recordings, a possible-fight review alert and the incident inspector](docs/media/dashboard.png)
+
+The dashboard brings camera views, evidence playback and response controls into one place. The screenshots below are the original prototype images from our Hackdays presentation. **“Possible fight” is a review warning**, not a confirmed incident.
+
+### Watch the sample footage
+
+https://github.com/user-attachments/assets/3bb7a94b-47c0-4fd7-be4c-ba5d8f573119
+
+[Open or download the full video](docs/media/evidence.mp4) · 1 min 26 sec · 6 MB. This is the supplied source footage, without VDMA overlays. It is an example input, not a detection-accuracy result.
+
+### What the operator sees
+
+![Side-by-side VDMA person tracks and pose lines with a sampled relative-depth heatmap](docs/media/pose-depth.png)
+
+**Pose + depth:** local tracking shows people and movement; the sampled depth view adds relative scene context. The heatmap does not measure distance in metres.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/pose-review.png" alt="VDMA pose overlay and possible-fight review warning" width="100%"></td>
+    <td width="50%"><img src="docs/media/incident-player.png" alt="VDMA saved incident player with event seeking, playback controls and original download" width="100%"></td>
+  </tr>
+  <tr>
+    <td><strong>Review the warning.</strong><br>Pose and movement checks explain why a scene needs attention. Operators can hide the drawings on current previews while detection continues.</td>
+    <td><strong>Go back to the evidence.</strong><br>Replay the saved clip, jump to the event and download the original. Gemini can add an evidence timeline and report in the background.</td>
+  </tr>
+</table>
+
+Only the supplied video and four presentation screenshots are included here. [Media and chart notes](docs/media/README.md) explain the assets and chart data.
+
 ## Contents
 
+- [See it in action](#see-it-in-action)
 - [Install and run](#install-and-run)
 - [Current capabilities](#current-capabilities)
 - [How an incident moves through the system](#how-an-incident-moves-through-the-system)
@@ -61,7 +93,8 @@ Adjust `VMD_REPORT_BASE_URL` for automatically saved PDF links when changing the
 | --- | --- | --- |
 | Camera monitoring | Independent state, pose tracks, motion and sampled depth/object views; up to four sessions | CPU, RAM, decoding and sampling determine usable capacity |
 | Fight checks | Anatomical contact, motion, reciprocal interaction, source-time duration and fresh matching depth | Brief events, occlusion and unreliable depth can prevent confirmation |
-| Posture/snatching checks | Fall/person-down/hands-up heuristics and staged standing-snatching checks | Observations do not prove injury or criminal intent |
+| Posture/snatching checks | Configurable lying-still dwell, standing reach–pull–departure checks and optional rider review | Observations do not prove injury or theft; rider alerts require operator review |
+| Unattended items | Optional stationary backpack/handbag/suitcase monitoring with a per-camera absence timer | Requires earlier observed nearby attendance; cannot establish ownership or contents |
 | Weapon alerts | Pinned YOLOv8n specialist; fresh gun/knife predictions strictly above 90% are public | Confidence is not calibrated correctness; small/obscured weapons can be missed |
 | Eco mode | Reduced quiet-scene inference; motion and active checks restore configured rates | Capture stays connected; counts are not measured energy savings |
 | Camera recovery | Saved live sources reconnect with backoff capped at 60 seconds | Stop persists; a changed phone IP is not discovered automatically |
@@ -79,12 +112,17 @@ flowchart TD
     B --> C[Local camera engine]
     C --> D[YOLO11n pose and ByteTrack]
     C --> E[Sampled relative depth]
-    C --> F[Sampled gun and knife detector]
+    C --> F[Sampled weapons and optional bag/rider context]
     D --> G[Motion and temporal evidence rules]
     E --> G
     F --> H[Fresh weapon episode gate]
+    F --> P[Stationary item + earlier attendance + absence timer]
+    F --> R[Original rider/vehicle + reach/pull/reaction]
+    G --> R
     G --> I[Incident and local evidence]
     H --> I
+    P --> I
+    R --> I
     I --> J[Operator dashboard and review]
     I --> K[Eligible live event: 10 second response window]
     K --> L[Configured Twilio calls; optional SMS]
@@ -102,14 +140,32 @@ Local response and cloud review run independently. **Calls do not wait for Gemin
 - **Pose/motion:** YOLO11n supplies boxes/keypoints; ByteTrack associates people within a camera session. Optical flow helps distinguish local movement from camera motion. Track IDs are temporary associations, not identities.
 - **Depth:** ZipDepth gives normalized relative inverse depth, not metres. Samples keep their original frame/time provenance. Old or mismatched depth cannot confirm a current contact.
 - **Duration:** fight escalation is configurable from 0.5–10 seconds, default 3. It controls supported interaction time without bypassing motion/contact/depth gates. Unsupported gaps pause or reset the clock. Depth-confirmed mode requires depth sampling of at least 0.5 Hz. Review-only mode (`responsive` in the API) saves provisional warnings and cannot confirm fights.
-- **Weapons:** checks work without a tracked person. YOLO26s supplies a person-only pass for best-effort head blur; general-object/knife predictions are not fallback public alerts. Stale, failed or stopped samples clear the weapon action. Clear intervals/cooldowns re-arm a visible-weapon episode rather than creating an incident on every poll.
+- **Weapons:** checks work without a tracked person. YOLO26s supplies people for best-effort head blur and optional bag/vehicle context; its general-object/knife predictions are not fallback weapon alerts. Stale, failed or stopped samples clear the weapon action. Clear intervals/cooldowns re-arm a visible-weapon episode rather than creating an incident on every poll.
 - **Bounded work:** capture and asynchronous workers prefer the latest frame over an accumulating backlog. Encoding uses a bounded storage queue. Sampling gaps still reduce evidence; dropping backlog cannot recover actions that were skipped.
 
 See [architecture.md](architecture.md), [interaction checks](docs/interaction-heuristics.md) and [detection history/provenance](docs/detection-update.md). Historical sections describe earlier thresholds/behavior; current code governs.
 
+### Pose and box display
+
+Click **Hide pose & boxes** above the camera grid or in the feed viewer to hide detection drawings across the current camera previews. Click **Show pose & boxes** to restore them. This browser remembers the choice. It is a display option: detection, alerts and evidence continue without restarting a camera. Head blur and incident banners remain visible; saved evidence keeps its original annotations. Clean pose previews are encoded on request and cached for the current frame, using the existing detections rather than rerunning a model.
+
+### Item, chain-snatching and lying-person alerts
+
+Open **Add camera** or select a camera and open **Settings**. Enable **Unattended bags & suitcases**, then set **Unattended item: alarm after** to 10–3600 seconds (default 60). **Person lying still: alarm after** is independently editable from 1–60 seconds (default 3). Settings belong to that camera, persist for saved live sources and restart a running camera briefly when applied.
+
+Unattended checks reuse YOLO26s for people, backpacks, handbags and suitcases. A stationary bag must first be seen beside exactly one nearby confident person for at least two source seconds and three samples. The alarm timer then counts only continuously observed time with no detected nearby person. Someone returning, item movement, lost visibility, ambiguous matching, a sample gap or camera movement breaks the pending check. A bag present alone when monitoring starts remains unarmed. The dashboard shows the last accepted sample's countdown rather than advancing a timer over missing footage. Uploaded videos sample sequentially in video time; live inference keeps bounded queues. Enable **alarm sound** for a local chime on a new live item/person-down/fall incident.
+
+Bag checks can run with **Knife & gun detection off**; this uses the existing `models/yolo26s.pt` without loading the weapon specialist. Bags clear a 0.5 model-score cutoff; weak visible people can interrupt absence but cannot arm it. An item alarm saves a reviewable `unattended_object` incident and local evidence. It can enter the existing optional Gemini reporting workflow. It does not start an automatic phone-response countdown; explicit manual dispatch remains available.
+
+Standing chain-snatching checks tolerate one hidden hip, require arm movement relative to the actor's torso, reject track jumps and victim-only separation, and retain enough departure observations at 2 FPS. A supported collar reach, pull and same-actor departure are movement hypotheses; they do not show that a chain was taken. Original-contact depth requirements remain.
+
+**Rider snatching review** is a separate opt-in setting (`snatching_vehicles=false` by default). It combines a near-neck reach and supported pull with the same rider/original vehicle moving and the other person's supported reaction toward the rider or fall. It reuses `models/yolo26s.pt`, can run with weapon detection off, and saves a **review alert**, never a confirmed-theft label or automatic-call trigger. Enable it in Add camera or Edit detection settings; reanalyse a recording after changing the setting because old saved incidents are not reclassified. Occluded wrists, broken tracking and ambiguous vehicle matches can prevent an alert; an ordinary exchange can also resemble the sequence. See the [interaction checks](docs/interaction-heuristics.md) for exact sequence gates and limitations.
+
+Person-down checks support one hidden hip and diagonal bodies when a visible straight leg corroborates the posture; seated/bent or moving bodies cannot complete the lying-still timer. These are regression-tested rules, not measured CCTV accuracy.
+
 ## Models and training
 
-The live pipeline currently uses **YOLO11n pose, optical flow, ZipDepth through ONNX Runtime, YOLO26s and a separate YOLOv8n threat detector**. YOLO26s is a general-object model, but this application restricts its pass to people for preview privacy. Only the specialist's gun/knife observations create weapon alerts.
+The live pipeline currently uses **YOLO11n pose, optical flow, ZipDepth through ONNX Runtime, YOLO26s and a separate YOLOv8n threat detector**. YOLO26s supplies people for preview privacy, backpack/handbag/suitcase observations with unattended checks, and vehicle context with rider review. Only the specialist's gun/knife observations create weapon alerts. The added temporal rules require no additional model or training.
 
 ### Which model goes where
 
@@ -121,7 +177,7 @@ Model binaries are deliberately excluded from Git. The installers create the lay
 | ZipDepth ONNX | `models/zipdepth-91f3fd2.onnx` | Recommended depth runtime; `scripts/download_depth_model.py` |
 | ZipDepth integrity manifest | `models/zipdepth-91f3fd2.json` | Required with ONNX; verifies revision and checkpoint/export hashes |
 | ZipDepth licence | `models/ZipDepth-LICENSE.txt` | Installer preserves source/export provenance and notice |
-| YOLO26s | `models/yolo26s.pt` | Person-only context when weapon/object sampling is enabled |
+| YOLO26s | `models/yolo26s.pt` | Person context; opt-in bag monitoring and rider/vehicle review |
 | Active gun/knife specialist | `models/assalim-normal-compressed-best.pt` | Assalim Normal_Compressed YOLOv8n; `0: guns`, `1: knife` |
 | Specialist licence | `models/Assalim-GPL-3.0.txt` | Downloaded with the pinned specialist |
 | MiDaS Small, optional | `models/midas_v21_small_256.pt`, `models/MiDaS/`, `models/efficientnet/` | Only needed for `MiDaS_small` |
@@ -158,6 +214,8 @@ The notebook does not deploy its output. Keep candidates separately, for example
 ### Five-class weapon and ordnance experiment
 
 The following supplied evaluation summary belongs to the separate experiment in [00surya/vdm-shield](https://github.com/00surya/vdm-shield/blob/main/docs/weapon-ordnance-experiment.md). Its detector completed **30 epochs followed by 20 additional fine-tuning epochs**. The second phase starts with fresh optimizer state. It is a candidate model and **has not replaced the detector in this application**.
+
+![Separate five-class candidate on 1,434 public test images: precision 72.10%, recall 65.84%, mAP at 50 71.35% and mAP at 50–95 50.32%. This is not the active VDMA detector or a CCTV benchmark.](docs/media/candidate-test-metrics.png)
 
 | Evaluation of the 50-epoch candidate | Result |
 | --- | --- |
@@ -234,7 +292,7 @@ Reports are versioned against evidence; upgrades invalidate stale briefing appro
 
 New eligible **physical live-camera** `fight`, `knife_detected` and `snatching_detected` incidents start a server-owned **ten-second** response countdown. Acknowledge, Cancel or false-positive review stops further escalation. Confirming a review also acknowledges it. SQLite preserves the original deadline through refresh/restart.
 
-The slider dispatches immediately. Gun/provisional events can be dispatched manually. **Recordings are always manual-only**; calls identify recorded footage and give analysis time/source offset instead of inventing original capture time. Synthetic/presentation incidents cannot call or send SMS.
+The slider dispatches immediately. Gun/provisional events, including rider-snatching review, can be dispatched manually. Rider review does not create an automatic countdown. **Recordings are always manual-only**; calls identify recorded footage and give analysis time/source offset instead of inventing original capture time. Synthetic/presentation incidents cannot call or send SMS.
 
 Calling needs a voice-capable Twilio sender, permitted recipients, valid credentials, saved centre contacts and the centre's **calling enabled** toggle. Set privately:
 
@@ -287,11 +345,15 @@ Centre passwords use salted scrypt hashes; dashboard sessions use expiring HttpO
 
 `python -m vmd`, `python -m vmd.voice` and the login helper load root `.env` through `python-dotenv` when installed; exported settings win. Direct Uvicorn launch needs explicit `--env-file .env` or exported configuration.
 
-Keep secrets, camera URLs, databases, recordings, caches, virtual environments and model weights out of Git. Presentation PDFs/PPTs and generated `output/` artifacts are excluded from this code publication. Checked-in static UI assets are still required. Head blur is best effort, not guaranteed anonymization; uploaded originals/evidence can remain sensitive.
+Keep secrets, camera URLs, databases, runtime recordings, caches, virtual environments and model weights out of Git. The explicitly selected public demo at `docs/media/evidence.mp4` is the only video exception. Presentation PDFs/PPTs and generated `output/` artifacts are excluded from this code publication. Checked-in static UI assets are still required. Head blur is best effort, not guaranteed anonymization; uploaded originals/evidence can remain sensitive.
 
 ## Performance and the 4 GB target
 
 The current code provides CPU inference, quiet-scene scheduling, bounded buffers, latest-frame queues and asynchronous workers. It still creates per-camera model state/child processes. The ZipDepth worker currently imports Torch despite using ONNX for inference. Running memory is not checkpoint size.
+
+![Eco scheduling example: configured pose 8 checks per second, depth 1 and objects 1; after 10 quiet seconds the targets are 2, 0.1 and 0.5, capped by the configured rates. These settings are not measured speed, memory, energy savings or accuracy.](docs/media/eco-sampling-cadence.png)
+
+The chart shows one configured example using the intervals in [`vmd/eco.py`](vmd/eco.py). Motion and active checks restore the configured rates. It shows how quiet scenes reduce scheduled work; device capacity still needs measurement.
 
 | Existing technique | Reduces | Does not prove |
 | --- | --- | --- |
@@ -340,7 +402,7 @@ Neither lab is required. Their weights/environments are excluded from Git. Local
 | --- | --- |
 | Startup/API/cameras | `vmd/__main__.py`, `vmd/api.py`, `vmd/cameras.py`, `vmd/capture.py` |
 | Pose/tracking/motion | `vmd/vision.py`, `vmd/tracking.py`, `vmd/stabilization.py` |
-| Temporal rules | `vmd/heuristics.py`, `vmd/behavior.py`, `vmd/confirmation.py`, `vmd/spatial.py`, `vmd/snatching.py` |
+| Temporal rules | `vmd/heuristics.py`, `vmd/behavior.py`, `vmd/confirmation.py`, `vmd/spatial.py`, `vmd/snatching.py`, `vmd/vehicle_snatching.py` |
 | Depth/weapons/Eco | `vmd/depth.py`, `vmd/depth_worker.py`, `vmd/objects.py`, `vmd/eco.py` |
 | Evidence/media | `vmd/engine.py`, `vmd/storage.py`, `vmd/media.py`, `vmd/evidence.py`, `vmd/share.py` |
 | Centre/response | `vmd/centre.py`, `vmd/alerts.py`, `vmd/calling.py`, `vmd/delivery.py` |

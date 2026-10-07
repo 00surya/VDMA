@@ -12,6 +12,7 @@ export const EVENT_NAMES = Object.freeze({
   weapon: "Weapon flag",
   knife_detected: "Knife detected",
   gun_detected: "Gun detected",
+  unattended_object: "Unattended item",
 });
 export const COLORS = [
   "#ef4444",

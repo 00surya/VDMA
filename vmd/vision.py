@@ -171,7 +171,7 @@ class Motion:
         return float(np.percentile(region,85)/(self.dt*person.height*(180/self.shape[0]))) if region is not None and region.size else 0.0
 
 
-def annotate(frame, people, privacy=True):
+def annotate(frame, people, privacy=True, *, overlays=True):
     image = frame.copy()
     height, width = image.shape[:2]
     for person in people:
@@ -192,6 +192,8 @@ def annotate(frame, people, privacy=True):
             if hx2 > hx1 and hy2 > hy1:
                 roi = image[hy1:hy2, hx1:hx2]
                 roi[:] = cv2.GaussianBlur(roi, (0, 0), sigmaX=max(15, (hx2-hx1)/3))
+        if not overlays:
+            continue
         color = (176, 224, 93)
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 1)
         cv2.putText(image, f"TRACK {person.track_id}" if person.track_id >= 0 else "ACQUIRING", (max(x1, 0), max(15, y1-8)), cv2.FONT_HERSHEY_SIMPLEX, .4, color, 1)
@@ -199,6 +201,19 @@ def annotate(frame, people, privacy=True):
             p, q = person.keypoints[a], person.keypoints[b]
             if min(p[2], q[2]) > .45:
                 cv2.line(image, (int(p[0]), int(p[1])), (int(q[0]), int(q[1])), color, 2, cv2.LINE_AA)
+    return image
+
+
+def annotate_status(image, alert=None, checking_text=None):
+    """Keep incident banners visible in both display variants."""
+    if checking_text and not alert:
+        cv2.putText(image, checking_text, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, .6, (30, 175, 245), 2)
+    if alert:
+        color = (75, 65, 235) if alert['event_type'] in {'fight', 'snatching_detected', 'person_down_after_fight'} else (30, 175, 245)
+        cv2.rectangle(image, (0, 0), (image.shape[1], 66), (18, 18, 24), -1)
+        scale = min(.75, (image.shape[1]-20)/max(1, len(alert['label'])*20))
+        cv2.putText(image, alert['label'], (12, 28), cv2.FONT_HERSHEY_SIMPLEX, scale, color, 2)
+        cv2.putText(image, 'HEURISTIC ALERT / REVIEW REQUIRED', (12, 53), cv2.FONT_HERSHEY_SIMPLEX, .42, (225, 225, 225), 1)
     return image
 
 
